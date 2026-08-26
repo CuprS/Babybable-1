@@ -10,7 +10,6 @@ import { AuthProvider, useAuth } from "@/src/auth";
 import { DrawerProvider } from "@/src/drawer";
 import { ToastProvider } from "@/src/toast";
 import { NotificationsWatcher } from "@/src/notifications";
-import { PostHogProvider } from "posthog-react-native";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -25,10 +24,14 @@ function AuthGate() {
     const publicRoutes = ["find-tutor", "become-tutor", "languages-near-you", "support", "mission", "blog", "privacy"];
     const inAuth = segments[0] === "(auth)" || segments[0] === "onboarding";
     const isPublic = publicRoutes.includes(String(segments[0] ?? ""));
+    const inAdmin = segments[0] === "admin";
     if (!user && !inAuth && !isPublic) {
       router.replace("/onboarding");
     } else if (user && inAuth) {
-      router.replace("/(tabs)");
+      router.replace(user.is_admin ? "/admin" : "/(tabs)");
+    } else if (user && user.is_admin && !inAdmin && segments[0] !== undefined && !isPublic) {
+      // Push admins to /admin whenever they land on user-only surfaces.
+      if (segments[0] === "(tabs)") router.replace("/admin");
     }
   }, [user, loading, segments, router]);
 
@@ -50,25 +53,14 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar barStyle="dark-content" backgroundColor="#FAF8F5" />
-        <PostHogProvider
-          apiKey={process.env.EXPO_PUBLIC_POSTHOG_KEY || "phc_placeholder"}
-          options={{
-            host: process.env.EXPO_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
-            captureAppLifecycleEvents: true,
-            enableSessionReplay: false,
-            disabled: !process.env.EXPO_PUBLIC_POSTHOG_KEY,
-          }}
-          autocapture={{ captureScreens: true, captureTouches: false }}
-        >
-          <AuthProvider>
-            <ToastProvider>
-              <DrawerProvider>
-                <NotificationsWatcher />
-                <AuthGate />
-              </DrawerProvider>
-            </ToastProvider>
-          </AuthProvider>
-        </PostHogProvider>
+        <AuthProvider>
+          <ToastProvider>
+            <DrawerProvider>
+              <NotificationsWatcher />
+              <AuthGate />
+            </DrawerProvider>
+          </ToastProvider>
+        </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

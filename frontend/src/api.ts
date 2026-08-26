@@ -56,7 +56,7 @@ export function fileUrl(pathOrUrl?: string | null): string | undefined {
 }
 
 // ---- Types ----
-export type Role = "parent" | "tutor";
+export type Role = "parent" | "tutor" | "admin";
 
 export interface UserPublic {
   id: string;
@@ -64,6 +64,7 @@ export interface UserPublic {
   name: string;
   role: Role;
   avatar_url?: string | null;
+  is_admin?: boolean;
 }
 
 export interface Tutor {

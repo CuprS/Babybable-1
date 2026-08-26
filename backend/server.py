@@ -36,33 +36,6 @@ EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 
 stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
 
-# ---- PostHog (backend) ----
-_posthog_client = None
-def _get_posthog():
-    global _posthog_client
-    if _posthog_client is not None:
-        return _posthog_client
-    key = os.environ.get("POSTHOG_PROJECT_TOKEN")
-    if not key:
-        _posthog_client = False
-        return False
-    try:
-        from posthog import Posthog
-        _posthog_client = Posthog(key, host=os.environ.get("POSTHOG_HOST", "https://us.i.posthog.com"))
-    except Exception:
-        _posthog_client = False
-    return _posthog_client
-
-
-def ph_capture(event: str, distinct_id: str, props: Optional[dict] = None):
-    client = _get_posthog()
-    if not client:
-        return
-    try:
-        client.capture(event=event, distinct_id=str(distinct_id), properties=(props or {}) | {"source": "server"})
-    except Exception:
-        pass
-
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
@@ -122,7 +95,7 @@ def _get_object_sync(path: str):
 
 
 # ---- Models ----
-Role = Literal["parent", "tutor"]
+Role = Literal["parent", "tutor", "admin"]
 
 
 class SignupRequest(BaseModel):
@@ -143,6 +116,7 @@ class UserPublic(BaseModel):
     name: str
     role: Role
     avatar_url: Optional[str] = None
+    is_admin: bool = False
 
 
 class AuthResponse(BaseModel):
@@ -300,7 +274,13 @@ async def current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
 
 
 def user_to_public(u: dict) -> UserPublic:
-    return UserPublic(id=u["id"], email=u["email"], name=u["name"], role=u["role"], avatar_url=u.get("avatar_url"))
+    return UserPublic(id=u["id"], email=u["email"], name=u["name"], role=u["role"], avatar_url=u.get("avatar_url"), is_admin=bool(u.get("is_admin")))
+
+
+async def require_admin(u: dict = Depends(current_user)) -> dict:
+    if not u.get("is_admin"):
+        raise HTTPException(403, "Admin only")
+    return u
 
 
 # ---- Auth routes ----
@@ -321,7 +301,6 @@ async def signup(body: SignupRequest):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.users.insert_one(doc)
-    ph_capture("signup", uid, {"role": body.role, "method": "email"})
     # If tutor, create an empty tutor profile
     if body.role == "tutor":
         tid = str(uuid.uuid4())
@@ -711,10 +690,9 @@ class EventIn(BaseModel):
 @api.post("/events")
 async def track_event(body: EventIn, u: dict = Depends(current_user)):
     await db.events.insert_one({
-        "user_id": u["id"], "role": u["role"], "name": body.name,
+        "user_id": u["id"], "role": u["role"], "user_name": u["name"], "name": body.name,
         "props": body.props or {}, "at": datetime.now(timezone.utc).isoformat(),
     })
-    ph_capture(body.name, u["id"], (body.props or {}) | {"role": u["role"]})
     return {"ok": True}
 
 
@@ -766,6 +744,44 @@ async def my_notifications(u: dict = Depends(current_user)):
     await _generate_dynamic_notifications(u)
     docs = await db.notifications.find({"user_id": u["id"]}, {"_id": 0}).sort("at", -1).to_list(50)
     return [NotificationOut(**d) for d in docs]
+
+
+# ---- Admin analytics ----
+@api.get("/admin/stats")
+async def admin_stats(u: dict = Depends(require_admin)):
+    return {
+        "users": await db.users.count_documents({}),
+        "parents": await db.users.count_documents({"role": "parent"}),
+        "tutors": await db.users.count_documents({"role": "tutor"}),
+        "bookings": await db.bookings.count_documents({}),
+        "paid_bookings": await db.bookings.count_documents({"payment_status": "paid"}),
+        "messages": await db.messages.count_documents({}),
+        "reviews": await db.reviews.count_documents({}),
+        "favorites": await db.favorites.count_documents({}),
+        "events": await db.events.count_documents({}),
+    }
+
+
+@api.get("/admin/events")
+async def admin_events(u: dict = Depends(require_admin), limit: int = 100, name: Optional[str] = None):
+    q: dict = {}
+    if name:
+        q["name"] = name
+    docs = await db.events.find(q, {"_id": 0}).sort("at", -1).to_list(limit)
+    # Aggregate by event name
+    counts_pipeline = [
+        {"$group": {"_id": "$name", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+        {"$limit": 20},
+    ]
+    counts = await db.events.aggregate(counts_pipeline).to_list(20)
+    return {"events": docs, "counts": [{"name": c["_id"], "count": c["count"]} for c in counts]}
+
+
+@api.get("/admin/users")
+async def admin_users(u: dict = Depends(require_admin), limit: int = 100):
+    docs = await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(limit)
+    return docs
 
 
 async def _generate_dynamic_notifications(u: dict):
@@ -850,6 +866,19 @@ KEEP_EMAILS = {t["email"] for t in SEED_TUTORS}
 
 
 async def seed_data():
+    # Seed the admin account if missing.
+    admin_email = "copperstone17@gmail.com"
+    admin = await db.users.find_one({"email": admin_email})
+    if not admin:
+        await db.users.insert_one({
+            "id": str(uuid.uuid4()), "email": admin_email,
+            "password_hash": hash_password("REDACTED-PASSWORD"),
+            "name": "Babybabel Admin", "role": "admin", "avatar_url": None,
+            "is_admin": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    elif not admin.get("is_admin"):
+        await db.users.update_one({"email": admin_email}, {"$set": {"is_admin": True, "role": "admin"}})
     # Remove ALL tutor accounts that are not in the keep list.
     legacy_users = await db.users.find(
         {"role": "tutor", "email": {"$nin": list(KEEP_EMAILS)}},
