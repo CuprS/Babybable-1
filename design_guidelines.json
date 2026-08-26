@@ -1,0 +1,184 @@
+{
+  "app_name": "NannyLang",
+  "personality": "1 iOS-Native Clean layout fused with warm 8 Hand-Drawn / Editorial Papyrus tones",
+  "personality_one_liner": "A warm, boundless, and trustworthy marketplace blending high-impact photography with soft papyrus tones and energetic orange accents.",
+  "color": {
+    "surface": "#FAF8F5",
+    "onSurface": "#2C2421",
+    "surfaceSecondary": "#F2EAE0",
+    "onSurfaceSecondary": "#463A36",
+    "surfaceTertiary": "#E8DDD1",
+    "onSurfaceTertiary": "#5A4C46",
+    "surfaceInverse": "#2C2421",
+    "onSurfaceInverse": "#FAF8F5",
+    "brand": "#ED6249",
+    "brandPrimary": "#ED6249",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#FBE0DB",
+    "onBrandSecondary": "#D44930",
+    "brandTertiary": "#F7EFEC",
+    "onBrandTertiary": "#B83A23",
+    "success": "#448962",
+    "onSuccess": "#FFFFFF",
+    "warning": "#D79A2A",
+    "onWarning": "#FFFFFF",
+    "error": "#CC4141",
+    "onError": "#FFFFFF",
+    "info": "#4A6E8C",
+    "onInfo": "#FFFFFF",
+    "border": "#E8DDD1",
+    "borderStrong": "#C5B29F",
+    "divider": "#E8DDD1"
+  },
+  "typography": {
+    "displayFontFamily": "Plus Jakarta Sans",
+    "textFontFamily": "Plus Jakarta Sans",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous Airbnb-style padding; minimal dividing lines. Use whitespace to separate content blocks. Ensure full-bleed images use edge-to-edge layout.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Feather",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Floating search bar at the top of Discover.",
+      "Bottom tab bar over scrolling content.",
+      "Sticky 'Book Now' footer on the Tutor Profile.",
+      "Floating back buttons over full-bleed hero images."
+    ],
+    "dont's": [
+      "Avoid glassmorphism on standard list rows or form fields.",
+      "Do not blur entire screens."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Onboarding & Role Selection",
+      "purpose": "Welcomes users and splits flow between 'I am a Parent' and 'I am a Tutor'.",
+      "states": {
+        "loading": "Centered brand-colored spinner.",
+        "empty": "N/A",
+        "error": "Standard alert toast."
+      },
+      "layout": "Full-bleed background image with a heavy dark vertical gradient scrim (transparent to 80% surfaceInverse). Bottom 30% contains the title, a warm greeting, and two pill-shaped buttons stacked vertically (Primary for Parent, Secondary for Tutor). Minimal UI chrome."
+    },
+    {
+      "name": "Discover (Parent Home)",
+      "purpose": "Allows parents to browse and filter tutors based on languages, ratings, and price.",
+      "states": {
+        "loading": "Skeleton UI for cards and horizontal scroll rows.",
+        "empty": "Illustration of a magnifying glass over a papyrus background with 'No tutors found in this language'.",
+        "error": "Error message with 'Tap to retry' button."
+      },
+      "layout": "Airbnb-style boundless feed. Floating glassmorphism search bar at the top (safe area). Horizontal carousel for 'Languages' (chips). Main feed consists of large, edge-to-edge square photo cards of tutors. Below each photo: Title (Name), Subtitle (Languages), Right-aligned Price & Rating. Minimal borders, using whitespace for separation."
+    },
+    {
+      "name": "Tutor Profile",
+      "purpose": "Detailed view of the tutor, showing their bio, languages, accreditation, and reviews.",
+      "states": {
+        "loading": "Skeleton UI replicating the profile layout.",
+        "empty": "N/A",
+        "error": "Retry state overlay."
+      },
+      "layout": "Full-bleed hero image of the tutor at the top with a top-to-bottom gradient scrim and a floating glass Back button. Content below scrolls over the image. Sections include: Quick Stats (horizontal icons for rating, rate, location), 'About me' text, 'Accreditations' (horizontal scrolling small cards/photos), and 'Reviews' (list). A sticky glass footer anchored at the bottom houses the 'Book Session' primary CTA."
+    },
+    {
+      "name": "Booking Flow",
+      "purpose": "Select dates, time slots, and confirm payment via Stripe.",
+      "states": {
+        "loading": "Inline spinners during Stripe validation.",
+        "empty": "N/A",
+        "error": "Inline error text below the specific failed input."
+      },
+      "layout": "Clean, single-column form. A custom calendar view for date selection, followed by a segmented control or chip grid for time slots. A summary card details the hourly rate * duration = total. 'Pay with Stripe' mocked UI button sticky at the bottom."
+    },
+    {
+      "name": "Messages",
+      "purpose": "In-app chat between parents and tutors.",
+      "states": {
+        "loading": "Skeleton list for the inbox.",
+        "empty": "Illustration of a chat bubble on a papyrus background with 'No messages yet'.",
+        "error": "Standard error toast."
+      },
+      "layout": "Standard inbox list view. Clean rows with round avatar, name, and preview snippet. Inside a chat: distinct bubbles. Parent messages in brandPrimary, Tutor messages in surfaceSecondary."
+    },
+    {
+      "name": "Tutor Dashboard",
+      "purpose": "Allows tutors to manage availability, upload accreditations, and view upcoming bookings.",
+      "states": {
+        "loading": "Skeleton dashboard cards.",
+        "empty": "'No upcoming bookings' card.",
+        "error": "Retry button."
+      },
+      "layout": "Overview screen with 2x2 grid for key metrics (Earnings, Hours). A horizontal scroll for 'Upcoming Bookings'. A dedicated section for 'My Profile' where they can upload new accreditation photos. Uses surfaceSecondary cards on a surface background for slight elevation without heavy shadows."
+    }
+  ],
+  "images": {
+    "onboarding_hero": {
+      "url": "https://images.unsplash.com/photo-1583468982228-19f19164aee2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwxfHxuYW5ueSUyMHJlYWRpbmclMjB0byUyMGNoaWxkfGVufDB8fHx8MTc4NzE2OTg2M3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "A woman and a child reading a book together in a library"
+    },
+    "tutor_avatar_1": {
+      "url": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwzfHxmcmllbmRseSUyMHByb2Zlc3Npb25hbCUyMHBvcnRyYWl0fGVufDB8fHx8MTc4NzE2OTg2M3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "Friendly professional woman smiling"
+    },
+    "tutor_avatar_2": {
+      "url": "https://images.pexels.com/photos/38808650/pexels-photo-38808650.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "alt": "Blonde woman smiling warmly outdoors"
+    },
+    "accreditation_sample": {
+      "url": "https://images.unsplash.com/photo-1589330694653-ded6df03f754?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2ODh8MHwxfHNlYXJjaHwxfHxibGFuayUyMGRpcGxvbWElMjBjZXJ0aWZpY2F0ZSUyMGRvY3VtZW50fGVufDB8fHx8MTc4NzE2OTg2M3ww&ixlib=rb-4.1.0&q=85",
+      "alt": "A university degree certificate with a red seal"
+    }
+  },
+  "haptics": {
+    "tab_press": "light",
+    "button_primary_press": "medium",
+    "filter_chip_toggle": "light",
+    "booking_confirm": "success"
+  },
+  "instructions_to_main_agent": [
+    "Adopt an Airbnb-style boundless UI: Use generous whitespace and large imagery over harsh borders and drop shadows.",
+    "Ensure 'Discover' utilizes a floating search bar wrapped in a glassmorphism container pinned to the top (safe area).",
+    "Tutor Profile cards on the Discover page should have large, edge-to-edge images with price and rating immediately below, skipping heavy card containers.",
+    "Implement the Papyrus and Orange color palette strictly. Avoid pure whites (#FFFFFF) for the main canvas, defaulting to the warm '#FAF8F5' surface.",
+    "Zero tolerance for blue or purple accents; adhere to the warm earthy/orange brand palette.",
+    "For all images that have text overlaid (e.g., Onboarding Hero, Tutor Profile header), YOU MUST apply a top-to-bottom vertical gradient scrim overlay using the surfaceInverse token (from transparent to at least 70% opacity at the bottom) to guarantee text contrast.",
+    "Use 'Plus Jakarta Sans' for a warm, highly legible, geometric sans-serif feel (mimicking Circular). Only weights 400 and 500.",
+    "When building the booking screen, ensure the 'Pay with Stripe' CTA is sticky at the bottom."
+  ]
+}

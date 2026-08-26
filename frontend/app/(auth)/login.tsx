@@ -1,0 +1,62 @@
+import { useState } from "react";
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Pressable } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { Feather } from "@expo/vector-icons";
+import { Button, Input } from "@/src/ui";
+import { theme } from "@/src/theme";
+import { useAuth } from "@/src/auth";
+
+export default function Login() {
+  const router = useRouter();
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setLoading(true); setError("");
+    try {
+      await signIn(email.trim(), password);
+      router.replace("/(tabs)");
+    } catch (e: any) {
+      setError(e?.message || "Login failed");
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+        <View style={styles.header}>
+          <Pressable testID="login-back" onPress={() => router.back()} hitSlop={12}>
+            <Feather name="arrow-left" size={24} color={theme.color.onSurface} />
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.subtitle}>Log in to continue with Babybabel.</Text>
+          <View style={{ gap: theme.space.lg, marginTop: theme.space.xl }}>
+            <Input testID="login-email-input" label="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} placeholder="you@example.com" />
+            <Input testID="login-password-input" label="Password" secureTextEntry value={password} onChangeText={setPassword} placeholder="Your password" />
+            {error ? <Text testID="login-error" style={styles.error}>{error}</Text> : null}
+            <Button testID="login-submit-button" title="Log in" onPress={submit} loading={loading} />
+            <Pressable onPress={() => router.replace("/onboarding")} testID="login-goto-signup" style={{ alignItems: "center" }}>
+              <Text style={styles.link}>New here? <Text style={{ fontWeight: "700", color: theme.color.brand }}>Create an account</Text></Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: theme.color.surface },
+  header: { paddingHorizontal: theme.space.xl, paddingVertical: theme.space.md },
+  content: { paddingHorizontal: theme.space.xl, paddingBottom: theme.space.xl },
+  title: { fontSize: 32, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5 },
+  subtitle: { fontSize: theme.font.lg, color: theme.color.onSurfaceSecondary, marginTop: theme.space.sm },
+  error: { color: theme.color.error, fontSize: theme.font.base },
+  link: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.base, marginTop: theme.space.sm },
+});
