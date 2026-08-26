@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, ImageBackground, Pressable } from "react-native";
+import { View, Text, StyleSheet, ImageBackground, Pressable, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -19,7 +19,11 @@ export default function Onboarding() {
       />
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.header}>
-          <Text style={styles.logo}>babybabel</Text>
+          <View style={styles.brand}>
+            {/* Replace /app/frontend/assets/images/babybabel-icon.png with your own icon PNG (recommended 512×512). */}
+            <Image source={require("../assets/images/babybabel-icon.png")} style={styles.icon} />
+            <Text style={styles.logo}>Babybabel</Text>
+          </View>
           <MenuButton />
         </View>
         <View style={styles.bottom}>
@@ -53,7 +57,9 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.color.surfaceInverse },
   safe: { flex: 1, justifyContent: "space-between", paddingHorizontal: theme.space.xl },
   header: { paddingTop: theme.space.xl, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  logo: { color: "#fff", fontSize: 22, fontWeight: "700", letterSpacing: -0.5 },
+  brand: { flexDirection: "row", alignItems: "center", gap: 10 },
+  icon: { width: 32, height: 32, borderRadius: 8 },
+  logo: { color: "#fff", fontSize: 24, fontWeight: "700", letterSpacing: -0.5 },
   bottom: { paddingBottom: theme.space.lg },
   title: { color: "#fff", fontSize: 40, fontWeight: "700", lineHeight: 44, letterSpacing: -1 },
   subtitle: { color: "rgba(255,255,255,0.9)", fontSize: theme.font.lg, marginTop: theme.space.md, lineHeight: 22 },

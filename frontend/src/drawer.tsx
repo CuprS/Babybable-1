@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView, Linking } from "react-native";
+import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView, Linking, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -61,7 +61,11 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
       >
         <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
           <View style={styles.header}>
-            <Text style={styles.logo}>babybabel</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              {/* Replace /app/frontend/assets/images/babybabel-icon.png with your own icon PNG. */}
+              <Image source={require("../assets/images/babybabel-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
+              <Text style={styles.logo}>Babybabel</Text>
+            </View>
             <Pressable onPress={close} testID="drawer-close" hitSlop={12}>
               <Feather name="x" size={22} color={theme.color.onSurface} />
             </Pressable>
