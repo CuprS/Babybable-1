@@ -681,6 +681,25 @@ async def update_parent_profile(patch: ParentProfileUpdate, u: dict = Depends(cu
     return parent_doc_to_model(doc, fresh["name"] if fresh else u["name"])
 
 
+@api.get("/parents/{user_id}/public", response_model=ParentProfile)
+async def get_parent_public(user_id: str, u: dict = Depends(current_user)):
+    """Public parent profile. Non-owners see children names + ages but NEVER their photos."""
+    parent = await db.parents.find_one({"user_id": user_id}, {"_id": 0})
+    if not parent:
+        raise HTTPException(404, "Parent profile not found")
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not fresh:
+        raise HTTPException(404, "User not found")
+    is_owner = u["id"] == user_id
+    if not is_owner:
+        # Strip children avatars for non-owners.
+        parent = dict(parent)
+        parent["children"] = [
+            {**c, "avatar_url": None} for c in parent.get("children", [])
+        ]
+    return parent_doc_to_model(parent, fresh["name"])
+
+
 # ---- Favourites, events, notifications ----
 class EventIn(BaseModel):
     name: str

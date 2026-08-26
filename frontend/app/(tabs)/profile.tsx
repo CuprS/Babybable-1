@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet, Pressable, ScrollView, Alert, ActivityIndicator } from "react-native";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
@@ -15,7 +15,20 @@ export default function Profile() {
   const { user, signOut, refresh } = useAuth();
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
+  const [tutorId, setTutorId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user?.role === "tutor") {
+      apiFetch<{ id: string }>("/tutors/me/profile").then((p) => setTutorId(p.id)).catch(() => {});
+    }
+  }, [user?.role]);
+
   if (!user) return null;
+
+  const openPublicView = () => {
+    if (user.role === "tutor" && tutorId) router.push(`/tutor/${tutorId}`);
+    else if (user.role === "parent") router.push(`/parent-profile/${user.id}`);
+  };
 
   const uploadAvatar = async () => {
     try {
@@ -78,6 +91,18 @@ export default function Profile() {
           <Text style={styles.hint}>Tap the photo to update your profile picture</Text>
         </View>
 
+        {(user.role === "tutor" || user.role === "parent") && (
+          <Pressable
+            testID="profile-view-public-btn"
+            onPress={openPublicView}
+            style={styles.row}
+            disabled={user.role === "tutor" && !tutorId}
+          >
+            <Feather name="eye" size={20} color={theme.color.brand} />
+            <Text style={[styles.rowText, { color: theme.color.brand }]}>See how others view my profile</Text>
+            <Feather name="chevron-right" size={20} color={theme.color.muted} />
+          </Pressable>
+        )}
         {user.role === "tutor" && (
           <Pressable
             testID="profile-edit-tutor-btn"

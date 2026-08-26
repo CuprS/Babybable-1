@@ -30,13 +30,24 @@ function AuthGate() {
     } else if (user && inAuth) {
       router.replace(user.is_admin ? "/admin" : "/(tabs)");
     } else if (user && user.is_admin && !inAdmin && segments[0] !== undefined && !isPublic) {
-      // Push admins to /admin whenever they land on user-only surfaces.
       if (segments[0] === "(tabs)") router.replace("/admin");
     }
   }, [user, loading, segments, router]);
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#FAF8F5" } }} />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: "#FAF8F5" },
+        animation: "slide_from_right",
+        animationDuration: 260,
+      }}
+    >
+      <Stack.Screen name="tutor/[id]" options={{ animation: "slide_from_bottom", animationDuration: 320 }} />
+      <Stack.Screen name="parent-profile/[id]" options={{ animation: "slide_from_bottom", animationDuration: 320 }} />
+      <Stack.Screen name="booking/[tutorId]" options={{ animation: "slide_from_bottom", animationDuration: 320 }} />
+      <Stack.Screen name="chat/[userId]" options={{ animation: "slide_from_right" }} />
+    </Stack>
   );
 }
 

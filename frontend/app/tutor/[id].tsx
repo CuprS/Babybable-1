@@ -35,7 +35,7 @@ export default function TutorDetail() {
 
   return (
     <View style={styles.root} testID="tutor-detail-screen">
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
         <View style={styles.heroWrap}>
           <Image source={{ uri: fileUrl(tutor.hero_image_url || tutor.avatar_url) }} style={styles.hero} contentFit="cover" />
           <LinearGradient colors={["rgba(0,0,0,0.4)", "rgba(0,0,0,0)"]} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 120 }} />
