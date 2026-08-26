@@ -18,6 +18,9 @@ from starlette.concurrency import run_in_threadpool
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 import io
+import math
+import time
+import threading
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -94,6 +97,54 @@ def _get_object_sync(path: str):
     return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
 
 
+# ---- Geocoding + distance ----
+_geocode_lock = threading.Lock()
+_last_geocode_at = 0.0
+_geocode_cache: dict = {}
+
+
+def geocode(city: str) -> Optional[dict]:
+    """Free geocoding via Nominatim. 1 req/sec per usage policy."""
+    city = (city or "").strip()
+    if not city:
+        return None
+    if city in _geocode_cache:
+        return _geocode_cache[city]
+    global _last_geocode_at
+    try:
+        with _geocode_lock:
+            wait = 1.0 - (time.time() - _last_geocode_at)
+            if wait > 0:
+                time.sleep(wait)
+            resp = requests.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": city, "format": "json", "limit": 1},
+                headers={"User-Agent": f"{APP_NAME}/1.0 (contact: help@babybabel.co)"},
+                timeout=8,
+            )
+            _last_geocode_at = time.time()
+        resp.raise_for_status()
+        arr = resp.json()
+        if not arr:
+            _geocode_cache[city] = None
+            return None
+        out = {"latitude": float(arr[0]["lat"]), "longitude": float(arr[0]["lon"])}
+        _geocode_cache[city] = out
+        return out
+    except Exception as e:
+        logger.warning(f"geocode({city}) failed: {e}")
+        return None
+
+
+def haversine_miles(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> float:
+    R = 3958.8  # miles
+    la1, la2 = math.radians(a_lat), math.radians(b_lat)
+    dla = math.radians(b_lat - a_lat)
+    dlo = math.radians(b_lng - a_lng)
+    h = math.sin(dla / 2) ** 2 + math.cos(la1) * math.cos(la2) * math.sin(dlo / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(h))
+
+
 # ---- Models ----
 Role = Literal["parent", "tutor", "admin"]
 
@@ -135,12 +186,15 @@ class TutorProfile(BaseModel):
     hourly_rate_cents: int = 3000
     currency: str = "usd"
     location: str = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    allows_remote: bool = False
     experience_years: int = 0
     rating: float = 0.0
     reviews_count: int = 0
     accreditation_urls: List[str] = []
     hero_image_url: Optional[str] = None
-    is_new: bool = False  # true when profile hasn't been completed yet
+    is_new: bool = False
 
 
 class TutorProfileUpdate(BaseModel):
@@ -152,15 +206,18 @@ class TutorProfileUpdate(BaseModel):
     avatar_url: Optional[str] = None
     hero_image_url: Optional[str] = None
     accreditation_urls: Optional[List[str]] = None
+    allows_remote: Optional[bool] = None
 
 
 class BookingCreate(BaseModel):
     tutor_id: str
-    date: str  # ISO date string
-    time: str  # HH:MM
+    date: str
+    time: str
     duration_minutes: int = Field(gt=0, le=480)
     language: str
     notes: Optional[str] = ""
+    is_au_pair: bool = False
+    lessons_count: int = Field(default=1, ge=1, le=200)
 
 
 class Booking(BaseModel):
@@ -179,6 +236,10 @@ class Booking(BaseModel):
     stripe_payment_intent_id: Optional[str] = None
     client_secret: Optional[str] = None
     notes: Optional[str] = ""
+    is_au_pair: bool = False
+    lessons_count: int = 1
+    distance_miles: Optional[float] = None
+    remote: bool = False
     created_at: str
 
 
@@ -207,6 +268,8 @@ class ParentProfile(BaseModel):
     name: str
     avatar_url: Optional[str] = None
     city: str = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     languages_desired: List[str] = []
     hours_per_week: int = 5
     learning_materials: str = ""
@@ -389,6 +452,20 @@ def tutor_doc_to_model(t: dict) -> TutorProfile:
     return TutorProfile(**data, is_new=is_new)
 
 
+
+async def maybe_geocode_and_persist(collection, filter_q: dict, location_str: str, previous: Optional[dict]):
+    """Geocode a location string if it changed vs the previous doc."""
+    if not location_str:
+        return
+    prev_loc = (previous or {}).get("location") or (previous or {}).get("city") or ""
+    if prev_loc.strip().lower() == location_str.strip().lower() and (previous or {}).get("latitude") is not None:
+        return
+    coords = await run_in_threadpool(geocode, location_str)
+    if coords:
+        await collection.update_one(filter_q, {"$set": coords})
+
+
+
 @api.get("/tutors", response_model=List[TutorProfile])
 async def list_tutors(q: Optional[str] = None, language: Optional[str] = None, min_rate: Optional[int] = None, max_rate: Optional[int] = None):
     query: dict = {}
@@ -407,6 +484,15 @@ async def list_tutors(q: Optional[str] = None, language: Optional[str] = None, m
         ]
     docs = await db.tutors.find(query, {"_id": 0}).to_list(200)
     return [tutor_doc_to_model(d) for d in docs]
+
+
+@api.get("/tutors/map")
+async def tutors_map():
+    docs = await db.tutors.find(
+        {"latitude": {"$ne": None}, "longitude": {"$ne": None}},
+        {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "latitude": 1, "longitude": 1, "location": 1, "hourly_rate_cents": 1, "allows_remote": 1},
+    ).to_list(200)
+    return docs
 
 
 @api.get("/tutors/{tutor_id}", response_model=TutorProfile)
@@ -431,12 +517,14 @@ async def get_my_tutor_profile(u: dict = Depends(current_user)):
 async def update_my_tutor_profile(patch: TutorProfileUpdate, u: dict = Depends(current_user)):
     if u["role"] != "tutor":
         raise HTTPException(403, "Only tutors")
+    prev = await db.tutors.find_one({"user_id": u["id"]}, {"_id": 0})
     update = {k: v for k, v in patch.model_dump(exclude_none=True).items()}
     if update:
         await db.tutors.update_one({"user_id": u["id"]}, {"$set": update})
-        # Also sync avatar to users if present
         if "avatar_url" in update:
             await db.users.update_one({"id": u["id"]}, {"$set": {"avatar_url": update["avatar_url"]}})
+        if "location" in update:
+            await maybe_geocode_and_persist(db.tutors, {"user_id": u["id"]}, update["location"], prev)
     d = await db.tutors.find_one({"user_id": u["id"]}, {"_id": 0})
     return tutor_doc_to_model(d)
 
@@ -449,7 +537,33 @@ async def create_booking(body: BookingCreate, u: dict = Depends(current_user)):
     t = await db.tutors.find_one({"id": body.tutor_id}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tutor not found")
-    amount = (t["hourly_rate_cents"] * body.duration_minutes + 59) // 60
+    p = await db.parents.find_one({"user_id": u["id"]}, {"_id": 0}) or {}
+    remote = bool(t.get("allows_remote"))
+    au_pair = bool(body.is_au_pair)
+    distance: Optional[float] = None
+    if t.get("latitude") is not None and p.get("latitude") is not None:
+        distance = round(
+            haversine_miles(t["latitude"], t["longitude"], p["latitude"], p["longitude"]),
+            1,
+        )
+    # Rule enforcement
+    if au_pair:
+        if body.lessons_count < 30:
+            raise HTTPException(400, "Au-pair bookings require a minimum of 30 lessons")
+    else:
+        if not remote:
+            if distance is None:
+                raise HTTPException(
+                    400,
+                    "Please set your city in your family profile so we can verify you're within 100 miles of this tutor.",
+                )
+            if distance > 100:
+                raise HTTPException(
+                    400,
+                    f"This tutor is {distance} miles away — over the 100-mile limit for in-person lessons. Book them for remote lessons or an au-pair stay instead.",
+                )
+    lessons = max(1, body.lessons_count)
+    amount = ((t["hourly_rate_cents"] * body.duration_minutes + 59) // 60) * lessons
     currency = t.get("currency", "usd")
     booking_id = str(uuid.uuid4())
     booking = {
@@ -468,6 +582,10 @@ async def create_booking(body: BookingCreate, u: dict = Depends(current_user)):
         "stripe_payment_intent_id": None,
         "client_secret": None,
         "notes": body.notes or "",
+        "is_au_pair": au_pair,
+        "lessons_count": lessons,
+        "distance_miles": distance,
+        "remote": remote and not au_pair,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     # Create Stripe PaymentIntent
@@ -639,6 +757,8 @@ def parent_doc_to_model(p: dict, name: str) -> ParentProfile:
         name=p.get("name") or name,
         avatar_url=p.get("avatar_url"),
         city=p.get("city", ""),
+        latitude=p.get("latitude"),
+        longitude=p.get("longitude"),
         languages_desired=p.get("languages_desired", []),
         hours_per_week=p.get("hours_per_week", 5),
         learning_materials=p.get("learning_materials", ""),
@@ -666,6 +786,7 @@ async def get_parent_profile(u: dict = Depends(current_user)):
 async def update_parent_profile(patch: ParentProfileUpdate, u: dict = Depends(current_user)):
     if u["role"] != "parent":
         raise HTTPException(403, "Only parents")
+    prev = await db.parents.find_one({"user_id": u["id"]}, {"_id": 0}) or {}
     update = patch.model_dump(exclude_none=True)
     if update.get("children") is not None and len(update["children"]) > 10:
         raise HTTPException(400, "Max 10 children")
@@ -676,6 +797,8 @@ async def update_parent_profile(patch: ParentProfileUpdate, u: dict = Depends(cu
         if "name" in update or "avatar_url" in update:
             user_patch = {k: v for k, v in update.items() if k in ("name", "avatar_url")}
             await db.users.update_one({"id": u["id"]}, {"$set": user_patch})
+        if "city" in update:
+            await maybe_geocode_and_persist(db.parents, {"user_id": u["id"]}, update["city"], prev)
     doc = await db.parents.find_one({"user_id": u["id"]}, {"_id": 0})
     fresh = await db.users.find_one({"id": u["id"]}, {"_id": 0})
     return parent_doc_to_model(doc, fresh["name"] if fresh else u["name"])
@@ -865,6 +988,7 @@ SEED_TUTORS = [
         "name": "Sofía García", "email": "sofia@babybabel.dev",
         "bio": "Bilingual educator with 8 years of experience helping children fall in love with Spanish through play, songs, and stories.",
         "languages": ["Spanish", "English"], "hourly_rate_cents": 3500, "location": "Barcelona, ES",
+        "latitude": 41.3874, "longitude": 2.1686, "allows_remote": True,
         "experience_years": 8, "rating": 4.9, "reviews_count": 42,
         "avatar_url": "https://images.pexels.com/photos/38808650/pexels-photo-38808650.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
         "hero_image_url": "https://images.unsplash.com/photo-1583468982228-19f19164aee2?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
@@ -874,6 +998,7 @@ SEED_TUTORS = [
         "name": "Marie Dubois", "email": "marie@babybabel.dev",
         "bio": "Certified French tutor and childcare specialist. I turn every session into a little Parisian adventure.",
         "languages": ["French", "English"], "hourly_rate_cents": 4200, "location": "Lyon, FR",
+        "latitude": 45.7640, "longitude": 4.8357, "allows_remote": False,
         "experience_years": 12, "rating": 4.8, "reviews_count": 67,
         "avatar_url": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?crop=entropy&cs=srgb&fm=jpg&q=85&w=800",
         "hero_image_url": "https://images.unsplash.com/photo-1503454537195-1dcabb73ffb9?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200",
@@ -922,6 +1047,7 @@ async def seed_data():
             "id": tid, "user_id": uid, "name": t["name"], "avatar_url": t["avatar_url"],
             "bio": t["bio"], "languages": t["languages"], "hourly_rate_cents": t["hourly_rate_cents"],
             "currency": "usd", "location": t["location"], "experience_years": t["experience_years"],
+            "latitude": t.get("latitude"), "longitude": t.get("longitude"), "allows_remote": t.get("allows_remote", False),
             "rating": t["rating"], "reviews_count": t["reviews_count"],
             "accreditation_urls": t["accreditation_urls"], "hero_image_url": t["hero_image_url"],
             "created_at": datetime.now(timezone.utc).isoformat(),

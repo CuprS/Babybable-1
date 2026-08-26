@@ -10,6 +10,7 @@ import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
 import { flagFor } from "@/src/flags";
 import { track } from "@/src/analytics";
+import { StaticMap } from "@/src/staticmap";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -62,6 +63,23 @@ export default function TutorDetail() {
 
           <Text style={styles.section}>About me</Text>
           <Text style={styles.bio}>{tutor.bio}</Text>
+
+          {tutor.allows_remote && (
+            <View style={styles.remoteChip} testID="tutor-remote-badge">
+              <Feather name="video" size={14} color={theme.color.brandDark} />
+              <Text style={styles.remoteText}>Remote lessons available</Text>
+            </View>
+          )}
+
+          <Text style={styles.section}>Where I'm based</Text>
+          <StaticMap
+            latitude={tutor.latitude}
+            longitude={tutor.longitude}
+            caption={tutor.location}
+            height={180}
+            zoom={11}
+            testID="tutor-map"
+          />
 
           {tutor.accreditation_urls.length > 0 && (
             <>
@@ -150,6 +168,8 @@ const styles = StyleSheet.create({
   langs: { flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap" },
   langChip: { paddingHorizontal: theme.space.lg, paddingVertical: 8, borderRadius: theme.radius.pill, backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand },
   langChipText: { color: theme.color.brandDark, fontWeight: "600" },
+  remoteChip: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: theme.space.md, paddingVertical: 8, borderRadius: theme.radius.pill, backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand, marginTop: theme.space.md },
+  remoteText: { color: theme.color.brandDark, fontWeight: "700" },
   bio: { fontSize: theme.font.lg, color: theme.color.onSurface, lineHeight: 24 },
   accredImg: { width: 160, height: 220, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary },
   reviewCard: { padding: theme.space.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, marginBottom: theme.space.sm },

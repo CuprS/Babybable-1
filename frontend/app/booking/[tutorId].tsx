@@ -38,6 +38,8 @@ export default function BookingScreen() {
   const [time, setTime] = useState<string>("");
   const [duration, setDuration] = useState(60);
   const [notes, setNotes] = useState("");
+  const [isAuPair, setIsAuPair] = useState(false);
+  const [lessons, setLessons] = useState(1);
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState("");
@@ -56,17 +58,20 @@ export default function BookingScreen() {
 
   if (loading || !tutor) return <View style={styles.center}><ActivityIndicator color={theme.color.brand} /></View>;
 
-  const totalCents = Math.ceil((tutor.hourly_rate_cents * duration) / 60);
+  const effectiveLessons = isAuPair ? Math.max(30, lessons) : lessons;
+  const totalCents = Math.ceil((tutor.hourly_rate_cents * duration) / 60) * effectiveLessons;
 
   const confirmBooking = async () => {
     setBooking(true); setError("");
     try {
       const b = await apiFetch<Booking>("/bookings", {
         method: "POST",
-        body: JSON.stringify({ tutor_id: tutor.id, date, time, duration_minutes: duration, language, notes }),
+        body: JSON.stringify({
+          tutor_id: tutor.id, date, time, duration_minutes: duration, language, notes,
+          is_au_pair: isAuPair, lessons_count: effectiveLessons,
+        }),
       });
-      track("booking_submitted", { booking_id: b.id, tutor_id: tutor.id, language, duration_minutes: duration, source: "client" });
-      // MOCKED: confirm payment on the backend without native Stripe SDK.
+      track("booking_submitted", { booking_id: b.id, tutor_id: tutor.id, language, duration_minutes: duration, is_au_pair: isAuPair, lessons: effectiveLessons });
       await apiFetch<Booking>(`/bookings/${b.id}/confirm-mock`, { method: "POST" });
       track("booking_created", { booking_id: b.id, tutor_id: tutor.id, source: "client" });
       router.replace("/(tabs)/bookings");
@@ -126,6 +131,51 @@ export default function BookingScreen() {
           ))}
         </View>
 
+        <Text style={styles.section}>Booking type</Text>
+        <View style={{ flexDirection: "row", gap: theme.space.sm }}>
+          <Pressable
+            onPress={() => { setIsAuPair(false); setLessons(1); }}
+            style={[styles.typeCard, !isAuPair && styles.typeCardOn]}
+            testID="booking-type-single"
+          >
+            <Feather name="calendar" size={18} color={!isAuPair ? theme.color.onBrand : theme.color.onSurface} />
+            <Text style={[styles.typeTitle, !isAuPair && { color: theme.color.onBrand }]}>Single session</Text>
+            <Text style={[styles.typeSub, !isAuPair && { color: "rgba(255,255,255,0.85)" }]}>Within 100 mi or remote</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { setIsAuPair(true); setLessons(30); }}
+            style={[styles.typeCard, isAuPair && styles.typeCardOn]}
+            testID="booking-type-aupair"
+          >
+            <Feather name="home" size={18} color={isAuPair ? theme.color.onBrand : theme.color.onSurface} />
+            <Text style={[styles.typeTitle, isAuPair && { color: theme.color.onBrand }]}>Au-pair</Text>
+            <Text style={[styles.typeSub, isAuPair && { color: "rgba(255,255,255,0.85)" }]}>Any distance · 30+ lessons</Text>
+          </Pressable>
+        </View>
+
+        {isAuPair && (
+          <View style={styles.stepperRow} testID="booking-lessons-stepper">
+            <Text style={{ color: theme.color.onSurfaceSecondary }}>Lessons</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
+              <Pressable onPress={() => setLessons((n) => Math.max(30, n - 1))} style={styles.stepBtn} testID="booking-lessons-minus"><Feather name="minus" size={16} color={theme.color.onSurface} /></Pressable>
+              <Text style={styles.stepValue}>{Math.max(30, lessons)}</Text>
+              <Pressable onPress={() => setLessons((n) => Math.min(200, n + 1))} style={styles.stepBtn} testID="booking-lessons-plus"><Feather name="plus" size={16} color={theme.color.onSurface} /></Pressable>
+            </View>
+          </View>
+        )}
+        {!isAuPair && tutor.allows_remote && (
+          <View style={styles.hint} testID="booking-remote-hint">
+            <Feather name="video" size={14} color={theme.color.brandDark} />
+            <Text style={styles.hintText}>This tutor offers remote lessons — distance doesn't matter.</Text>
+          </View>
+        )}
+        {!isAuPair && !tutor.allows_remote && (
+          <View style={styles.hint}>
+            <Feather name="map-pin" size={14} color={theme.color.brandDark} />
+            <Text style={styles.hintText}>In-person only. Booking blocks if you're more than 100 mi away.</Text>
+          </View>
+        )}
+
         <Text style={styles.section}>Notes (optional)</Text>
         <TextInput
           testID="booking-notes"
@@ -139,7 +189,7 @@ export default function BookingScreen() {
 
         <View style={styles.summary}>
           <Text style={styles.summaryTitle}>Summary</Text>
-          <Row label={`$${(tutor.hourly_rate_cents / 100).toFixed(0)}/hr × ${duration} min`} value={`$${(totalCents / 100).toFixed(2)}`} />
+          <Row label={`$${(tutor.hourly_rate_cents / 100).toFixed(0)}/hr × ${duration} min${effectiveLessons > 1 ? ` × ${effectiveLessons} lessons` : ""}`} value={`$${(totalCents / 100).toFixed(2)}`} />
           <View style={{ height: 1, backgroundColor: theme.color.border, marginVertical: theme.space.md }} />
           <Row label="Total" value={`$${(totalCents / 100).toFixed(2)}`} bold />
         </View>
@@ -185,4 +235,13 @@ const styles = StyleSheet.create({
   summaryTitle: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface, marginBottom: theme.space.xs },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.lg, backgroundColor: theme.color.surface, borderTopWidth: 1, borderTopColor: theme.color.border },
   stripeNote: { textAlign: "center", color: theme.color.muted, fontSize: 11, marginTop: theme.space.sm },
+  typeCard: { flex: 1, padding: theme.space.md, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary, gap: 4 },
+  typeCardOn: { backgroundColor: theme.color.brand },
+  typeTitle: { fontWeight: "700", color: theme.color.onSurface, fontSize: theme.font.lg },
+  typeSub: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm },
+  stepperRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: theme.space.md, padding: theme.space.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md },
+  stepBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: theme.color.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.color.border },
+  stepValue: { fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, minWidth: 32, textAlign: "center" },
+  hint: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, marginTop: theme.space.sm, padding: theme.space.md, backgroundColor: theme.color.brandSoft, borderRadius: theme.radius.md },
+  hintText: { color: theme.color.brandDark, fontSize: theme.font.sm, flex: 1 },
 });

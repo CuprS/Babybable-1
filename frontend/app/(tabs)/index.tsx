@@ -12,6 +12,7 @@ import { Chip } from "@/src/ui";
 import { MenuButton } from "@/src/drawer";
 import { flagFor } from "@/src/flags";
 import { track } from "@/src/analytics";
+import { StaticMap, MapMarker } from "@/src/staticmap";
 
 const LANGUAGES = ["All", "Spanish", "French", "Japanese", "Mandarin", "German", "Arabic", "English", "Italian"];
 
@@ -19,6 +20,7 @@ export default function Explore() {
   const { user } = useAuth();
   const router = useRouter();
   const [tutors, setTutors] = useState<Tutor[]>([]);
+  const [mapPins, setMapPins] = useState<MapMarker[]>([]);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -57,6 +59,11 @@ export default function Explore() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadFavs(); }, [loadFavs]);
+  useEffect(() => {
+    apiFetch<{ latitude: number; longitude: number; name: string }[]>("/tutors/map")
+      .then((rows) => setMapPins(rows.map((r) => ({ latitude: r.latitude, longitude: r.longitude, label: r.name, color: "red" }))))
+      .catch(() => {});
+  }, []);
 
   const toggleFav = async (id: string) => {
     const isFav = favs.has(id);
@@ -114,9 +121,17 @@ export default function Explore() {
           contentContainerStyle={{ paddingTop: theme.space.md, paddingBottom: theme.space["3xl"], paddingHorizontal: theme.space.xl, gap: theme.space.xl }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={theme.color.brand} />}
           ListHeaderComponent={
-            <Text style={{ color: theme.color.onSurfaceSecondary, fontWeight: "600", marginBottom: theme.space.sm }} testID="tutor-count">
-              {tutors.length} tutor{tutors.length === 1 ? "" : "s"}{lang !== "All" ? ` · ${flagFor(lang)} ${lang}` : ""}
-            </Text>
+            <View>
+              {mapPins.length > 0 && (
+                <View style={{ marginBottom: theme.space.lg }} testID="explore-map">
+                  <Text style={{ fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface, marginBottom: theme.space.sm }}>Tutors near and far</Text>
+                  <StaticMap markers={mapPins} zoom={3} height={180} caption={`${mapPins.length} tutor${mapPins.length === 1 ? "" : "s"} on the map`} />
+                </View>
+              )}
+              <Text style={{ color: theme.color.onSurfaceSecondary, fontWeight: "600", marginBottom: theme.space.sm }} testID="tutor-count">
+                {tutors.length} tutor{tutors.length === 1 ? "" : "s"}{lang !== "All" ? ` · ${flagFor(lang)} ${lang}` : ""}
+              </Text>
+            </View>
           }
           ListEmptyComponent={
             <View style={{ padding: theme.space["2xl"], alignItems: "center" }}>

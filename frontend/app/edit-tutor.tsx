@@ -68,6 +68,7 @@ export default function EditTutor() {
           experience_years: parseInt(experience) || 0,
           hourly_rate_cents: Math.max(500, Math.round(parseFloat(rate) * 100)),
           languages: langs,
+          allows_remote: !!tutor?.allows_remote,
         }),
       });
       setTutor(updated);
@@ -122,6 +123,21 @@ export default function EditTutor() {
           <View style={{ flex: 1 }}><Input label="Experience (years)" value={experience} onChangeText={setExperience} keyboardType="numeric" testID="edit-exp" /></View>
         </View>
 
+        <Pressable
+          onPress={() => tutor && setTutor({ ...tutor, allows_remote: !tutor.allows_remote })}
+          style={[styles.toggleRow, tutor?.allows_remote && styles.toggleRowOn]}
+          testID="edit-remote-toggle"
+        >
+          <Feather name="video" size={20} color={tutor?.allows_remote ? theme.color.onBrand : theme.color.onSurface} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.toggleTitle, tutor?.allows_remote && { color: theme.color.onBrand }]}>Offer remote lessons</Text>
+            <Text style={[styles.toggleSub, tutor?.allows_remote && { color: "rgba(255,255,255,0.85)" }]}>
+              Reach families outside the 100-mile radius.
+            </Text>
+          </View>
+          <View style={[styles.dot, tutor?.allows_remote && styles.dotOn]} />
+        </Pressable>
+
         <Text style={styles.section}>Languages you teach</Text>
         <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap" }}>
           {langs.map((l) => (
@@ -167,4 +183,10 @@ const styles = StyleSheet.create({
   addBtn: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.color.brand, alignItems: "center", justifyContent: "center", alignSelf: "flex-end" },
   accredImg: { width: 120, height: 160, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary },
   accredAdd: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: theme.color.borderStrong, borderStyle: "dashed" },
+  toggleRow: { flexDirection: "row", alignItems: "center", gap: theme.space.md, padding: theme.space.lg, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary },
+  toggleRowOn: { backgroundColor: theme.color.brand },
+  toggleTitle: { fontWeight: "700", color: theme.color.onSurface, fontSize: theme.font.lg },
+  toggleSub: { color: theme.color.onSurfaceSecondary, marginTop: 2 },
+  dot: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: theme.color.borderStrong, backgroundColor: theme.color.surface },
+  dotOn: { borderColor: "#fff", backgroundColor: "#fff" },
 });

@@ -8,10 +8,12 @@ import { apiFetch, fileUrl } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
 import { flagFor } from "@/src/flags";
+import { StaticMap } from "@/src/staticmap";
 
 interface Child { id: string; name: string; age: number; avatar_url?: string | null }
 interface Parent {
   user_id: string; name: string; avatar_url?: string | null; city: string;
+  latitude?: number | null; longitude?: number | null;
   languages_desired: string[]; hours_per_week: number; learning_materials: string; children: Child[];
 }
 
@@ -93,6 +95,20 @@ export default function ParentPublic() {
             <Text style={styles.body}>{parent.learning_materials}</Text>
           </>
         ) : null}
+
+        {(parent.latitude != null && parent.longitude != null) && (
+          <>
+            <Text style={styles.section}>Where they live</Text>
+            <StaticMap
+              latitude={parent.latitude}
+              longitude={parent.longitude}
+              caption={parent.city}
+              height={180}
+              zoom={11}
+              testID="parent-map"
+            />
+          </>
+        )}
 
         <Text style={styles.section}>Children</Text>
         {parent.children.length === 0 ? (

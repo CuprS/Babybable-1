@@ -77,6 +77,9 @@ export interface Tutor {
   hourly_rate_cents: number;
   currency: string;
   location: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  allows_remote?: boolean;
   experience_years: number;
   rating: number;
   reviews_count: number;
