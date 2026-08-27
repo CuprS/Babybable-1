@@ -46,6 +46,8 @@ function AuthGate() {
       <Stack.Screen name="tutor/[id]" options={{ animation: "slide_from_bottom", animationDuration: 320 }} />
       <Stack.Screen name="parent-profile/[id]" options={{ animation: "slide_from_bottom", animationDuration: 320 }} />
       <Stack.Screen name="booking/[tutorId]" options={{ animation: "slide_from_bottom", animationDuration: 320 }} />
+      <Stack.Screen name="booking-detail/[id]" options={{ animation: "slide_from_right", animationDuration: 260 }} />
+      <Stack.Screen name="payment/[id]" options={{ animation: "slide_from_bottom", animationDuration: 320 }} />
       <Stack.Screen name="chat/[userId]" options={{ animation: "slide_from_right" }} />
     </Stack>
   );

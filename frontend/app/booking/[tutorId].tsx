@@ -6,6 +6,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiFetch, Tutor, Booking } from "@/src/api";
 import { theme } from "@/src/theme";
 import { Chip, Button } from "@/src/ui";
+import { track } from "@/src/analytics";
 
 const DURATIONS = [
   { label: "60 min", value: 60 },
@@ -72,9 +73,7 @@ export default function BookingScreen() {
         }),
       });
       track("booking_submitted", { booking_id: b.id, tutor_id: tutor.id, language, duration_minutes: duration, is_au_pair: isAuPair, lessons: effectiveLessons });
-      await apiFetch<Booking>(`/bookings/${b.id}/confirm-mock`, { method: "POST" });
-      track("booking_created", { booking_id: b.id, tutor_id: tutor.id, source: "client" });
-      router.replace("/(tabs)/bookings");
+      router.replace(`/booking-detail/${b.id}`);
     } catch (e: any) {
       setError(e?.message || "Booking failed");
     } finally { setBooking(false); }
@@ -200,11 +199,11 @@ export default function BookingScreen() {
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, theme.space.lg) }]}>
         <Button
           testID="booking-confirm-btn"
-          title={`Pay $${(totalCents / 100).toFixed(2)} with Stripe`}
+          title={`Continue · $${(totalCents / 100).toFixed(2)}`}
           onPress={confirmBooking}
           loading={booking}
         />
-        <Text style={styles.stripeNote}>Payment powered by Stripe · MOCKED confirmation in MVP</Text>
+        <Text style={styles.stripeNote}>Review and pay on the next screen.</Text>
       </View>
     </SafeAreaView>
   );

@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { apiFetch, Booking } from "@/src/api";
 import { theme } from "@/src/theme";
@@ -10,6 +10,7 @@ import { MenuButton } from "@/src/drawer";
 
 export default function Bookings() {
   const { user } = useAuth();
+  const router = useRouter();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -54,7 +55,11 @@ export default function Bookings() {
             </View>
           }
           renderItem={({ item }) => (
-            <View style={styles.card} testID={`booking-${item.id}`}>
+            <Pressable
+              testID={`booking-${item.id}`}
+              onPress={() => router.push(`/booking-detail/${item.id}`)}
+              style={styles.card}
+            >
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                 <Text style={styles.who}>
                   {user?.role === "parent" ? item.tutor_name : item.parent_name}
@@ -63,12 +68,15 @@ export default function Bookings() {
                   <Text style={styles.badgeText}>{item.payment_status}</Text>
                 </View>
               </View>
-              <Text style={styles.meta}>{item.language} · {item.duration_minutes} min</Text>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: theme.space.md }}>
+              <Text style={styles.meta}>{item.language} · {item.duration_minutes} min{item.is_au_pair ? ` · au-pair · ${item.lessons_count} lessons` : ""}</Text>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: theme.space.md }}>
                 <Text style={styles.date}>{item.date} · {item.time}</Text>
-                <Text style={styles.amount}>${(item.amount_cents / 100).toFixed(0)}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={styles.amount}>${(item.amount_cents / 100).toFixed(0)}</Text>
+                  <Feather name="chevron-right" size={20} color={theme.color.muted} />
+                </View>
               </View>
-            </View>
+            </Pressable>
           )}
         />
       )}

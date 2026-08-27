@@ -490,6 +490,20 @@ def tutor_doc_to_model(t: dict) -> TutorProfile:
     locs = locs or []
     primary = locs[0] if locs else {}
     data = {k: t.get(k) for k in TutorProfile.model_fields.keys() if k not in ("is_new", "locations", "location", "latitude", "longitude")}
+    # Defensive: coerce None -> defaults for fields that don't allow None
+    if data.get("allows_remote") is None:
+        data["allows_remote"] = False
+    for k in ("bio", "currency"):
+        if data.get(k) is None:
+            data[k] = "" if k != "currency" else "usd"
+    for k in ("languages", "accreditation_urls"):
+        if data.get(k) is None:
+            data[k] = []
+    for k in ("hourly_rate_cents", "experience_years", "reviews_count"):
+        if data.get(k) is None:
+            data[k] = 0
+    if data.get("rating") is None:
+        data["rating"] = 0.0
     return TutorProfile(
         **data,
         is_new=is_new,
@@ -714,6 +728,16 @@ async def my_bookings(u: dict = Depends(current_user)):
     field = "parent_id" if u["role"] == "parent" else "tutor_id"
     docs = await db.bookings.find({field: u["id"]}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return [Booking(**d) for d in docs]
+
+
+@api.get("/bookings/{booking_id}", response_model=Booking)
+async def get_booking(booking_id: str, u: dict = Depends(current_user)):
+    b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not b:
+        raise HTTPException(404, "Booking not found")
+    if b["parent_id"] != u["id"] and b["tutor_id"] != u["id"] and not u.get("is_admin"):
+        raise HTTPException(403, "Not your booking")
+    return Booking(**b)
 
 
 @api.post("/stripe/webhook")
@@ -1217,9 +1241,10 @@ async def seed_data():
         })
     elif not admin.get("is_admin"):
         await db.users.update_one({"email": admin_email}, {"$set": {"is_admin": True, "role": "admin"}})
-    # Remove ALL tutor accounts that are not in the keep list.
+    # Only remove legacy DEMO tutors (emails on the @babybabel.dev domain) that aren't in the keep list.
+    # NEVER touch real tutor signups.
     legacy_users = await db.users.find(
-        {"role": "tutor", "email": {"$nin": list(KEEP_EMAILS)}},
+        {"role": "tutor", "email": {"$regex": "@babybabel\\.dev$", "$nin": list(KEEP_EMAILS)}},
         {"_id": 0, "id": 1},
     ).to_list(500)
     for lu in legacy_users:

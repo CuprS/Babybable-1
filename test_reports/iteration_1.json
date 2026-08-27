@@ -1,0 +1,43 @@
+{
+  "summary": "Backend + frontend tested end-to-end. All requested features & bug fixes VERIFIED WORKING. Pytest: 7/7 passed (tutor signup survives restart, seeded tutors survive, admin survives, GET /api/bookings/{id} ACL — owner 200 / stranger 403 / unknown 404, POST /bookings creates pending booking, POST /bookings/{id}/confirm-mock flips to paid). Frontend Playwright confirmed: bookings tab → tap booking → /booking-detail/{id} → booking-status-card visible → for pending, booking-detail-pay-btn shown → tap → /payment/{id} → payment-pay-btn tap → returns to /booking-detail/{id} with status 'Payment complete'. NEW booking creation flow no longer auto-pays: /booking/[tutorId] → confirm → /booking-detail/{id} (NOT bookings list) with pending status + Continue-to-payment button. Fixed two collateral bugs while testing (see updated_files).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/auth/signup (role=tutor) → subsequent GET /api/tutors", "issue": "The tutor doc inserted in signup() (server.py L400-409) is missing the 'allows_remote' field. On next GET /tutors, TutorProfile pydantic validation crashed with 500: 'allows_remote Input should be a valid boolean, input_value=None'. I patched tutor_doc_to_model to coerce None → defaults so the list endpoint stays alive, but the RIGHT fix is to add default values ('allows_remote': False, 'currency': 'usd', etc.) directly into the signup() insert to match the seed shape. Same latent risk exists for tutors created before this fix — every self-signed-up tutor pollutes the list until the serializer is defensive."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "app/booking/[tutorId].tsx", "issue": "`track(...)` was called on line 74 but `track` was never imported from '@/src/analytics'. Confirming a booking would throw ReferenceError at runtime, breaking the whole new flow (booking creation → booking-detail). I added the missing import. Please code-review; you may want to add ESLint no-undef gate to catch this class of bug.", "testID": "booking-confirm-btn", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_babybabel_bookings.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Consider the cleaner backend fix: add sensible defaults (allows_remote=False, currency='usd', languages=[], etc.) at insertion time in the tutor branch of /api/auth/signup (server.py ~L400-409), matching the seed doc shape. My tutor_doc_to_model coercion is a defensive net but doesn't fix the underlying inconsistency.",
+    "Verify the toast-success component actually renders a `data-testid=\"toast-success\"` element (I could not detect it after payment — either the testID is missing or the toast auto-dismisses in <1s and my post-tap check missed it). The functional outcome (status flips to paid, navigates back) is correct."
+  ],
+  "critical_code_review_comments": [
+    "server.py: signup() creates tutor docs without the same defaults as seeded tutors — will keep biting whenever new fields are added to TutorProfile. Unify via a helper.",
+    "frontend booking/[tutorId].tsx was calling undefined `track()` — add tsc/eslint no-undef to CI.",
+    "server.py is ~1290 lines; consider splitting routes into modules (auth, tutors, bookings, messages, admin) per the >700-line guideline."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (defensive None-coercion in tutor_doc_to_model)",
+    "/app/frontend/app/booking/[tutorId].tsx (added missing `import { track } from \"@/src/analytics\"`)",
+    "/app/backend/tests/conftest.py (new)",
+    "/app/backend/tests/test_babybabel_bookings.py (new)"
+  ],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "~95% (all functional flows passed; only the toast-success testID probe was inconclusive)"},
+  "seed_data_creation": "Test created ephemeral tutor accounts (tutor.new.<random>@example.com) and one parent 'other.<random>@test.dev' via signup. Also created new pending bookings under prv@test.dev while exercising the payment/creation flows.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend seed_data() bug fix verified: signing up a tutor with a non-@babybabel.dev email now survives `sudo supervisorctl restart backend`. Two seeded tutors + admin also intact after restart. GET /api/bookings/{id} enforces owner/tutor/admin ACL correctly (403 for strangers, 404 for unknown). New booking flow no longer auto-pays — payment_status starts as 'pending' and only flips to 'paid' after /confirm-mock. All Expo frontend flows for booking-tap → detail → payment → status-flip pass.",
+  "rca_of_issue": "1) Tutor signup 500-on-list: /api/auth/signup inserts tutor docs missing the 'allows_remote' field; TutorProfile is strictly-typed bool. Mitigated by coercing None→False (and other defaults) in tutor_doc_to_model. Ideal fix: put defaults in the signup insert. 2) Frontend booking confirm crash: missing `import { track } from '@/src/analytics'` in /app/frontend/app/booking/[tutorId].tsx — fixed."
+}
