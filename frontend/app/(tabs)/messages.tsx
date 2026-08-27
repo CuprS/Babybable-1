@@ -60,24 +60,42 @@ export default function Messages() {
             </View>
           }
           renderItem={({ item }) => (
-            <Pressable
-              testID={`thread-${item.other_user_id}`}
-              onPress={() => router.push(`/chat/${item.other_user_id}?name=${encodeURIComponent(item.other_user_name)}`)}
-              style={styles.row}
-            >
-              {item.other_user_avatar ? (
-                <Image source={{ uri: fileUrl(item.other_user_avatar) }} style={styles.avatar} contentFit="cover" />
-              ) : (
-                <View style={[styles.avatar, styles.avatarFallback]}>
-                  <Text style={{ color: "#fff", fontWeight: "700" }}>{item.other_user_name?.[0] ?? "?"}</Text>
+            <View style={styles.rowWrap}>
+              <Pressable
+                testID={`thread-${item.other_user_id}`}
+                onPress={() => router.push(`/chat/${item.other_user_id}?name=${encodeURIComponent(item.other_user_name)}`)}
+                style={styles.row}
+              >
+                {item.other_user_avatar ? (
+                  <Image source={{ uri: fileUrl(item.other_user_avatar) }} style={styles.avatar} contentFit="cover" />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarFallback]}>
+                    <Text style={{ color: "#fff", fontWeight: "700" }}>{item.other_user_name?.[0] ?? "?"}</Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name} numberOfLines={1}>{item.other_user_name}</Text>
+                  <Text style={styles.preview} numberOfLines={1}>{item.last_message}</Text>
                 </View>
+                <Feather name="chevron-right" size={20} color={theme.color.muted} />
+              </Pressable>
+              {item.other_user_role === "tutor" && (
+                <Pressable
+                  onPress={async () => {
+                    try {
+                      const t = await apiFetch<{ id: string }>(`/tutors/by-user/${item.other_user_id}`);
+                      router.push(`/tutor/${t.id}`);
+                    } catch {}
+                  }}
+                  style={styles.viewProfileBtn}
+                  testID={`thread-view-profile-${item.other_user_id}`}
+                  hitSlop={6}
+                >
+                  <Feather name="user" size={14} color={theme.color.brandDark} />
+                  <Text style={styles.viewProfileText}>View profile</Text>
+                </Pressable>
               )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name} numberOfLines={1}>{item.other_user_name}</Text>
-                <Text style={styles.preview} numberOfLines={1}>{item.last_message}</Text>
-              </View>
-              <Feather name="chevron-right" size={20} color={theme.color.muted} />
-            </Pressable>
+            </View>
           )}
         />
       )}
@@ -91,7 +109,10 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5 },
   sub: { color: theme.color.onSurfaceSecondary, marginTop: 4 },
   empty: { alignItems: "center", paddingTop: theme.space["3xl"], paddingHorizontal: theme.space.xl },
-  row: { flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingVertical: theme.space.md, borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth },
+  row: { flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingVertical: theme.space.md },
+  rowWrap: { borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: theme.space.sm },
+  viewProfileBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.radius.pill, backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand, marginLeft: 66, marginBottom: theme.space.sm },
+  viewProfileText: { color: theme.color.brandDark, fontWeight: "600", fontSize: 12 },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.color.surfaceSecondary },
   avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: theme.color.brand },
   name: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface },

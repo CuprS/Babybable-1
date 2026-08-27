@@ -176,6 +176,12 @@ class AuthResponse(BaseModel):
     user: UserPublic
 
 
+class TutorLocation(BaseModel):
+    name: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
 class TutorProfile(BaseModel):
     id: str
     user_id: str
@@ -185,14 +191,17 @@ class TutorProfile(BaseModel):
     languages: List[str] = []
     hourly_rate_cents: int = 3000
     currency: str = "usd"
-    location: str = ""
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    location: str = ""  # legacy — primary location name
+    latitude: Optional[float] = None  # legacy — primary lat
+    longitude: Optional[float] = None  # legacy — primary lng
+    locations: List[TutorLocation] = []
     allows_remote: bool = False
     experience_years: int = 0
     rating: float = 0.0
     reviews_count: int = 0
-    accreditation_urls: List[str] = []
+    accreditation_urls: List[str] = []  # legacy
+    accreditation_photo_url: Optional[str] = None
+    accreditation_document_url: Optional[str] = None
     hero_image_url: Optional[str] = None
     is_new: bool = False
 
@@ -201,11 +210,12 @@ class TutorProfileUpdate(BaseModel):
     bio: Optional[str] = None
     languages: Optional[List[str]] = None
     hourly_rate_cents: Optional[int] = None
-    location: Optional[str] = None
+    locations: Optional[List[str]] = None  # accept plain names, we geocode
     experience_years: Optional[int] = None
     avatar_url: Optional[str] = None
     hero_image_url: Optional[str] = None
-    accreditation_urls: Optional[List[str]] = None
+    accreditation_photo_url: Optional[str] = None
+    accreditation_document_url: Optional[str] = None
     allows_remote: Optional[bool] = None
 
 
@@ -248,11 +258,34 @@ class MessageCreate(BaseModel):
     text: str
 
 
+class Invitation(BaseModel):
+    price_cents: int = Field(ge=100)
+    date: str
+    time: str
+    duration_minutes: int = Field(gt=0, le=480)
+    language: str
+    note: Optional[str] = ""
+    status: str = "pending"  # pending | accepted | declined
+    booking_id: Optional[str] = None
+
+
+class InvitationCreate(BaseModel):
+    to_user_id: str
+    price_cents: int = Field(ge=100)
+    date: str
+    time: str
+    duration_minutes: int = Field(gt=0, le=480)
+    language: str
+    note: Optional[str] = ""
+
+
 class Message(BaseModel):
     id: str
     from_user_id: str
     to_user_id: str
     text: str
+    kind: str = "text"
+    invitation: Optional[Invitation] = None
     created_at: str
 
 
@@ -414,11 +447,13 @@ async def update_me(patch: UserUpdate, u: dict = Depends(current_user)):
 @api.post("/uploads")
 async def upload(file: UploadFile = File(...), u: dict = Depends(current_user)):
     ext = (file.filename or "file").split(".")[-1].lower()
-    if ext not in ("jpg", "jpeg", "png", "webp", "heic", "heif"):
+    IMAGE_EXTS = ("jpg", "jpeg", "png", "webp", "heic", "heif")
+    DOC_EXTS = ("pdf", "doc", "docx", "rtf", "txt")
+    if ext not in IMAGE_EXTS and ext not in DOC_EXTS:
         ext = "jpg"
     path = f"{APP_NAME}/uploads/{u['id']}/{uuid.uuid4()}.{ext}"
     data = await file.read()
-    ctype = file.content_type or "image/jpeg"
+    ctype = file.content_type or ("application/pdf" if ext == "pdf" else "image/jpeg")
     try:
         await run_in_threadpool(_put_object_sync, path, data, ctype)
     except Exception as e:
@@ -428,7 +463,7 @@ async def upload(file: UploadFile = File(...), u: dict = Depends(current_user)):
         "path": path, "owner_id": u["id"], "content_type": ctype,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
-    return {"path": path, "url": f"/api/files/{path}"}
+    return {"path": path, "url": f"/api/files/{path}", "content_type": ctype}
 
 
 @api.get("/files/{path:path}")
@@ -448,8 +483,21 @@ async def get_file(path: str):
 # ---- Tutors ----
 def tutor_doc_to_model(t: dict) -> TutorProfile:
     is_new = not (t.get("bio") and t.get("languages") and t.get("avatar_url"))
-    data = {k: t.get(k) for k in TutorProfile.model_fields.keys() if k != "is_new"}
-    return TutorProfile(**data, is_new=is_new)
+    # Backfill locations from legacy 'location'
+    locs = t.get("locations")
+    if not locs and t.get("location"):
+        locs = [{"name": t["location"], "latitude": t.get("latitude"), "longitude": t.get("longitude")}]
+    locs = locs or []
+    primary = locs[0] if locs else {}
+    data = {k: t.get(k) for k in TutorProfile.model_fields.keys() if k not in ("is_new", "locations", "location", "latitude", "longitude")}
+    return TutorProfile(
+        **data,
+        is_new=is_new,
+        locations=[TutorLocation(**l) for l in locs],
+        location=primary.get("name", "") or t.get("location", ""),
+        latitude=primary.get("latitude") if primary else t.get("latitude"),
+        longitude=primary.get("longitude") if primary else t.get("longitude"),
+    )
 
 
 
@@ -489,10 +537,23 @@ async def list_tutors(q: Optional[str] = None, language: Optional[str] = None, m
 @api.get("/tutors/map")
 async def tutors_map():
     docs = await db.tutors.find(
-        {"latitude": {"$ne": None}, "longitude": {"$ne": None}},
-        {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "latitude": 1, "longitude": 1, "location": 1, "hourly_rate_cents": 1, "allows_remote": 1},
+        {},
+        {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "latitude": 1, "longitude": 1, "location": 1, "locations": 1, "hourly_rate_cents": 1, "allows_remote": 1},
     ).to_list(200)
-    return docs
+    out = []
+    for d in docs:
+        locs = d.get("locations") or ([{"name": d.get("location"), "latitude": d.get("latitude"), "longitude": d.get("longitude")}] if d.get("latitude") is not None else [])
+        for l in locs:
+            if l.get("latitude") is None or l.get("longitude") is None:
+                continue
+            out.append({
+                "id": d["id"], "name": d["name"], "avatar_url": d.get("avatar_url"),
+                "latitude": l["latitude"], "longitude": l["longitude"],
+                "location": l.get("name"),
+                "hourly_rate_cents": d.get("hourly_rate_cents"),
+                "allows_remote": d.get("allows_remote", False),
+            })
+    return out
 
 
 @api.get("/tutors/{tutor_id}", response_model=TutorProfile)
@@ -519,12 +580,28 @@ async def update_my_tutor_profile(patch: TutorProfileUpdate, u: dict = Depends(c
         raise HTTPException(403, "Only tutors")
     prev = await db.tutors.find_one({"user_id": u["id"]}, {"_id": 0})
     update = {k: v for k, v in patch.model_dump(exclude_none=True).items()}
+    # Handle multi-location: geocode each and store as list of {name, lat, lng}.
+    if "locations" in update:
+        raw = [s.strip() for s in update["locations"] if s and s.strip()]
+        prev_locs = {(l.get("name") or "").strip().lower(): l for l in (prev or {}).get("locations", [])}
+        geocoded = []
+        for name in raw:
+            existing = prev_locs.get(name.strip().lower())
+            if existing and existing.get("latitude") is not None:
+                geocoded.append({"name": name, "latitude": existing["latitude"], "longitude": existing["longitude"]})
+            else:
+                coords = await run_in_threadpool(geocode, name)
+                geocoded.append({"name": name, "latitude": (coords or {}).get("latitude"), "longitude": (coords or {}).get("longitude")})
+        update["locations"] = geocoded
+        # Sync primary legacy fields for the map/list card.
+        if geocoded:
+            update["location"] = geocoded[0]["name"]
+            update["latitude"] = geocoded[0]["latitude"]
+            update["longitude"] = geocoded[0]["longitude"]
     if update:
         await db.tutors.update_one({"user_id": u["id"]}, {"$set": update})
         if "avatar_url" in update:
             await db.users.update_one({"id": u["id"]}, {"$set": {"avatar_url": update["avatar_url"]}})
-        if "location" in update:
-            await maybe_geocode_and_persist(db.tutors, {"user_id": u["id"]}, update["location"], prev)
     d = await db.tutors.find_one({"user_id": u["id"]}, {"_id": 0})
     return tutor_doc_to_model(d)
 
@@ -540,12 +617,20 @@ async def create_booking(body: BookingCreate, u: dict = Depends(current_user)):
     p = await db.parents.find_one({"user_id": u["id"]}, {"_id": 0}) or {}
     remote = bool(t.get("allows_remote"))
     au_pair = bool(body.is_au_pair)
+    # Distance to CLOSEST tutor location.
     distance: Optional[float] = None
-    if t.get("latitude") is not None and p.get("latitude") is not None:
-        distance = round(
-            haversine_miles(t["latitude"], t["longitude"], p["latitude"], p["longitude"]),
-            1,
-        )
+    if p.get("latitude") is not None:
+        candidates: List[tuple] = []
+        for loc in (t.get("locations") or []):
+            if loc.get("latitude") is not None:
+                candidates.append((loc["latitude"], loc["longitude"]))
+        if not candidates and t.get("latitude") is not None:
+            candidates.append((t["latitude"], t["longitude"]))
+        if candidates:
+            distance = round(
+                min(haversine_miles(lat, lng, p["latitude"], p["longitude"]) for lat, lng in candidates),
+                1,
+            )
     # Rule enforcement
     if au_pair:
         if body.lessons_count < 30:
@@ -670,11 +755,120 @@ async def send_message(body: MessageCreate, u: dict = Depends(current_user)):
         "from_user_id": u["id"],
         "to_user_id": body.to_user_id,
         "text": body.text,
+        "kind": "text",
+        "invitation": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.messages.insert_one(m)
     await push_notification(body.to_user_id, "chat", f"New message from {u['name']}", body.text[:120])
     return Message(**m)
+
+
+@api.post("/messages/invitation", response_model=Message)
+async def send_invitation(body: InvitationCreate, u: dict = Depends(current_user)):
+    if u["role"] != "tutor":
+        raise HTTPException(403, "Only tutors can send lesson invitations")
+    if not (await db.users.find_one({"id": body.to_user_id})):
+        raise HTTPException(404, "Recipient not found")
+    mid = str(uuid.uuid4())
+    inv = {
+        "price_cents": body.price_cents, "date": body.date, "time": body.time,
+        "duration_minutes": body.duration_minutes, "language": body.language,
+        "note": body.note or "", "status": "pending", "booking_id": None,
+    }
+    m = {
+        "id": mid,
+        "from_user_id": u["id"],
+        "to_user_id": body.to_user_id,
+        "text": f"Lesson invitation · {body.language} · {body.date} {body.time}",
+        "kind": "invitation",
+        "invitation": inv,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.messages.insert_one(m)
+    await push_notification(body.to_user_id, "invitation", f"Lesson invitation from {u['name']}", f"{body.language} · {body.date} at {body.time} · ${body.price_cents/100:.0f}")
+    return Message(**m)
+
+
+@api.post("/messages/invitation/{message_id}/accept", response_model=Booking)
+async def accept_invitation(message_id: str, u: dict = Depends(current_user)):
+    if u["role"] != "parent":
+        raise HTTPException(403, "Only parents can accept invitations")
+    msg = await db.messages.find_one({"id": message_id}, {"_id": 0})
+    if not msg or msg.get("kind") != "invitation":
+        raise HTTPException(404, "Invitation not found")
+    if msg["to_user_id"] != u["id"]:
+        raise HTTPException(403, "Not your invitation")
+    inv = msg.get("invitation") or {}
+    if inv.get("status") != "pending":
+        raise HTTPException(400, f"Invitation is already {inv.get('status')}")
+    t = await db.tutors.find_one({"user_id": msg["from_user_id"]}, {"_id": 0})
+    if not t:
+        raise HTTPException(404, "Tutor profile not found")
+    booking_id = str(uuid.uuid4())
+    booking = {
+        "id": booking_id,
+        "parent_id": u["id"],
+        "parent_name": u["name"],
+        "tutor_id": t["id"],
+        "tutor_name": t["name"],
+        "date": inv["date"],
+        "time": inv["time"],
+        "duration_minutes": inv["duration_minutes"],
+        "language": inv["language"],
+        "amount_cents": inv["price_cents"],
+        "currency": t.get("currency", "usd"),
+        "payment_status": "pending",
+        "stripe_payment_intent_id": None,
+        "client_secret": None,
+        "notes": inv.get("note", ""),
+        "is_au_pair": False,
+        "lessons_count": 1,
+        "distance_miles": None,
+        "remote": bool(t.get("allows_remote")),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    # Stripe PaymentIntent (best-effort)
+    try:
+        intent = await run_in_threadpool(
+            lambda: stripe.PaymentIntent.create(
+                amount=inv["price_cents"], currency=booking["currency"],
+                automatic_payment_methods={"enabled": True},
+                metadata={"booking_id": booking_id, "invitation_message_id": message_id},
+                idempotency_key=f"invitation-{booking_id}",
+            )
+        )
+        booking["stripe_payment_intent_id"] = intent.id
+        booking["client_secret"] = intent.client_secret
+    except Exception:
+        booking["stripe_payment_intent_id"] = f"pi_mock_{booking_id}"
+        booking["client_secret"] = f"pi_mock_secret_{booking_id}"
+    await db.bookings.insert_one(booking)
+    await db.messages.update_one(
+        {"id": message_id},
+        {"$set": {"invitation.status": "accepted", "invitation.booking_id": booking_id}},
+    )
+    await push_notification(t["user_id"], "booking", "Invitation accepted", f"{u['name']} accepted your lesson invitation for {inv['date']}")
+    return Booking(**booking)
+
+
+@api.post("/messages/invitation/{message_id}/decline")
+async def decline_invitation(message_id: str, u: dict = Depends(current_user)):
+    msg = await db.messages.find_one({"id": message_id}, {"_id": 0})
+    if not msg or msg.get("kind") != "invitation":
+        raise HTTPException(404, "Invitation not found")
+    if msg["to_user_id"] != u["id"]:
+        raise HTTPException(403, "Not your invitation")
+    await db.messages.update_one({"id": message_id}, {"$set": {"invitation.status": "declined"}})
+    return {"declined": True}
+
+
+@api.get("/tutors/by-user/{user_id}", response_model=TutorProfile)
+async def tutor_by_user(user_id: str):
+    d = await db.tutors.find_one({"user_id": user_id}, {"_id": 0})
+    if not d:
+        raise HTTPException(404, "Tutor profile not found")
+    return tutor_doc_to_model(d)
 
 
 @api.get("/messages/threads")

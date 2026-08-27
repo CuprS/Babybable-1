@@ -67,6 +67,7 @@ export interface UserPublic {
   is_admin?: boolean;
 }
 
+export interface TutorLocation { name: string; latitude?: number | null; longitude?: number | null }
 export interface Tutor {
   id: string;
   user_id: string;
@@ -76,14 +77,17 @@ export interface Tutor {
   languages: string[];
   hourly_rate_cents: number;
   currency: string;
-  location: string;
+  location: string;  // legacy primary
   latitude?: number | null;
   longitude?: number | null;
+  locations?: TutorLocation[];
   allows_remote?: boolean;
   experience_years: number;
   rating: number;
   reviews_count: number;
-  accreditation_urls: string[];
+  accreditation_urls: string[];  // legacy
+  accreditation_photo_url?: string | null;
+  accreditation_document_url?: string | null;
   hero_image_url?: string | null;
   is_new?: boolean;
 }

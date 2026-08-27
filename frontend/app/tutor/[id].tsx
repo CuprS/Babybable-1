@@ -5,12 +5,13 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { Linking } from "react-native";
 import { apiFetch, fileUrl, Tutor, Review } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
 import { flagFor } from "@/src/flags";
 import { track } from "@/src/analytics";
-import { StaticMap } from "@/src/staticmap";
+import { StaticMap, MapMarker } from "@/src/staticmap";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -44,7 +45,7 @@ export default function TutorDetail() {
 
         <View style={styles.body}>
           <Text style={styles.name}>{tutor.name}</Text>
-          <Text style={styles.location}>{tutor.location}</Text>
+          <Text style={styles.location}>{(tutor.locations && tutor.locations.length ? tutor.locations.map((l) => l.name).join(" · ") : tutor.location) || "Location coming soon"}</Text>
 
           <View style={styles.stats}>
             <Stat icon="star" label={`${tutor.rating.toFixed(1)} · ${tutor.reviews_count} reviews`} />
@@ -75,20 +76,52 @@ export default function TutorDetail() {
           <StaticMap
             latitude={tutor.latitude}
             longitude={tutor.longitude}
-            caption={tutor.location}
+            markers={(tutor.locations || [])
+              .filter((l) => l.latitude != null && l.longitude != null)
+              .map((l): MapMarker => ({ latitude: l.latitude as number, longitude: l.longitude as number, label: l.name, color: "red" }))}
+            caption={(tutor.locations || []).map((l) => l.name).join(" · ") || tutor.location}
             height={180}
-            zoom={11}
+            zoom={tutor.locations && tutor.locations.length > 1 ? 5 : 11}
             testID="tutor-map"
           />
+          {tutor.locations && tutor.locations.length > 0 && (
+            <View style={styles.locChipsRow}>
+              {tutor.locations.map((l) => (
+                <View key={l.name} style={styles.locChip}>
+                  <Feather name="map-pin" size={12} color={theme.color.brandDark} />
+                  <Text style={styles.locChipText}>{l.name}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
-          {tutor.accreditation_urls.length > 0 && (
+          {(tutor.accreditation_photo_url || tutor.accreditation_document_url || (tutor.accreditation_urls && tutor.accreditation_urls.length > 0)) && (
             <>
               <Text style={styles.section}>Accreditations</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.md }}>
-                {tutor.accreditation_urls.map((u, i) => (
+              <View style={styles.accredWrap}>
+                {tutor.accreditation_photo_url && (
+                  <Image
+                    source={{ uri: fileUrl(tutor.accreditation_photo_url) }}
+                    style={styles.accredImg}
+                    contentFit="cover"
+                  />
+                )}
+                {/* Legacy list fallback */}
+                {!tutor.accreditation_photo_url && tutor.accreditation_urls && tutor.accreditation_urls.slice(0, 1).map((u, i) => (
                   <Image key={i} source={{ uri: fileUrl(u) }} style={styles.accredImg} contentFit="cover" />
                 ))}
-              </ScrollView>
+                {tutor.accreditation_document_url && (
+                  <Pressable
+                    onPress={() => Linking.openURL(fileUrl(tutor.accreditation_document_url!) || "")}
+                    style={styles.accredDoc}
+                    testID="tutor-accred-doc"
+                  >
+                    <Feather name="file-text" size={28} color={theme.color.brand} />
+                    <Text style={styles.accredDocTitle}>View credentials</Text>
+                    <Text style={styles.accredDocMeta}>PDF · tap to open</Text>
+                  </Pressable>
+                )}
+              </View>
             </>
           )}
 
@@ -172,6 +205,13 @@ const styles = StyleSheet.create({
   remoteText: { color: theme.color.brandDark, fontWeight: "700" },
   bio: { fontSize: theme.font.lg, color: theme.color.onSurface, lineHeight: 24 },
   accredImg: { width: 160, height: 220, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary },
+  accredWrap: { flexDirection: "row", gap: theme.space.md, flexWrap: "wrap" },
+  accredDoc: { width: 160, height: 220, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary, alignItems: "center", justifyContent: "center", gap: 6, padding: theme.space.md, borderWidth: 1, borderColor: theme.color.borderStrong },
+  accredDocTitle: { color: theme.color.onSurface, fontWeight: "700", fontSize: theme.font.lg, textAlign: "center" },
+  accredDocMeta: { color: theme.color.muted, fontSize: theme.font.sm },
+  locChipsRow: { flexDirection: "row", flexWrap: "wrap", gap: theme.space.sm, marginTop: theme.space.md },
+  locChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: theme.space.md, paddingVertical: 6, borderRadius: theme.radius.pill, backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand },
+  locChipText: { color: theme.color.brandDark, fontWeight: "600", fontSize: 13 },
   reviewCard: { padding: theme.space.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, marginBottom: theme.space.sm },
   muted: { color: theme.color.onSurfaceSecondary },
   topBar: {
