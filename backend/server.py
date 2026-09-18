@@ -29,6 +29,8 @@ load_dotenv(ROOT_DIR / ".env")
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME = os.environ["DB_NAME"]
 JWT_SECRET = os.environ["JWT_SECRET"]
+if "change-me" in JWT_SECRET or len(JWT_SECRET) < 32:
+    raise RuntimeError("JWT_SECRET is a weak/placeholder value — refusing to start")
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_MINUTES = int(os.environ.get("ACCESS_TOKEN_MINUTES", "10080"))
 APP_NAME = os.environ.get("APP_NAME", "babybabel")
@@ -467,11 +469,23 @@ async def upload(file: UploadFile = File(...), u: dict = Depends(current_user)):
 
 
 @api.get("/files/{path:path}")
-async def get_file(path: str):
-    # Public read for images. Ownership check lives in DB record (we just serve).
+async def get_file(path: str, token: Optional[str] = None, u_maybe: Optional[str] = Depends(oauth2_scheme)):
     rec = await db.uploads.find_one({"path": path}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "File not found")
+    # Children photos are strictly private — served only to the owning parent (or admin) via a Bearer token.
+    child_ref = await db.parents.find_one({"children.avatar_url": path}, {"_id": 0, "user_id": 1})
+    if child_ref:
+        tok = u_maybe or token
+        if not tok:
+            raise HTTPException(401, "Auth required for private file")
+        try:
+            payload = jwt.decode(tok, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        except Exception:
+            raise HTTPException(401, "Invalid token")
+        caller = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0})
+        if not caller or (caller["id"] != child_ref["user_id"] and not caller.get("is_admin")):
+            raise HTTPException(403, "Not your file")
     try:
         content, ctype = await run_in_threadpool(_get_object_sync, path)
     except Exception as e:
@@ -743,13 +757,13 @@ async def get_booking(booking_id: str, u: dict = Depends(current_user)):
 @api.post("/stripe/webhook")
 async def stripe_webhook(request: Request, stripe_signature: str = Header(None, alias="Stripe-Signature")):
     payload = await request.body()
-    secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
+    secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "").strip()
+    if not secret:
+        raise HTTPException(503, "Webhook not configured")
+    if not stripe_signature:
+        raise HTTPException(400, "Missing signature")
     try:
-        if secret:
-            event = stripe.Webhook.construct_event(payload, stripe_signature, secret)
-        else:
-            import json
-            event = json.loads(payload)
+        event = stripe.Webhook.construct_event(payload, stripe_signature, secret)
     except Exception as e:
         raise HTTPException(400, f"Invalid webhook: {e}")
     obj = event["data"]["object"]
@@ -1228,18 +1242,20 @@ KEEP_EMAILS = {t["email"] for t in SEED_TUTORS}
 
 
 async def seed_data():
-    # Seed the admin account if missing.
     admin_email = "copperstone17@gmail.com"
+    admin_pw = os.environ.get("ADMIN_INITIAL_PASSWORD")
+    if not admin_pw:
+        logger.warning("ADMIN_INITIAL_PASSWORD not set — admin seed skipped")
     admin = await db.users.find_one({"email": admin_email})
-    if not admin:
+    if not admin and admin_pw:
         await db.users.insert_one({
             "id": str(uuid.uuid4()), "email": admin_email,
-            "password_hash": hash_password("REDACTED-PASSWORD"),
+            "password_hash": hash_password(admin_pw),
             "name": "Babybabel Admin", "role": "admin", "avatar_url": None,
             "is_admin": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-    elif not admin.get("is_admin"):
+    elif admin and not admin.get("is_admin"):
         await db.users.update_one({"email": admin_email}, {"$set": {"is_admin": True, "role": "admin"}})
     # Only remove legacy DEMO tutors (emails on the @babybabel.dev domain) that aren't in the keep list.
     # NEVER touch real tutor signups.
