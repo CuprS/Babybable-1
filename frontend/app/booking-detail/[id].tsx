@@ -7,19 +7,31 @@ import { apiFetch, Booking } from "@/src/api";
 import { theme } from "@/src/theme";
 import { Button } from "@/src/ui";
 import { useAuth } from "@/src/auth";
+import { useReviewPrompt } from "@/src/reviewprompt";
 
 export default function BookingDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { openReview } = useReviewPrompt();
   const [b, setB] = useState<Booking | null>(null);
   const [loading, setLoading] = useState(true);
+  const [hasReviewed, setHasReviewed] = useState(false);
 
   useEffect(() => {
     if (!id) return;
-    apiFetch<Booking>(`/bookings/${id}`).then(setB).catch(() => {}).finally(() => setLoading(false));
-  }, [id]);
+    apiFetch<Booking>(`/bookings/${id}`).then(async (data) => {
+      setB(data);
+      // Check if we've already reviewed this booking
+      if (user?.role === "parent") {
+        try {
+          const reviews = await apiFetch<{ booking_id?: string; parent_id: string }[]>(`/reviews/tutor/${data.tutor_id}`);
+          setHasReviewed(reviews.some((r) => r.booking_id === data.id && r.parent_id === user.id));
+        } catch {}
+      }
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [id, user]);
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={theme.color.brand} /></View>;
   if (!b) return <View style={styles.center}><Text>Booking not found</Text></View>;
@@ -27,6 +39,7 @@ export default function BookingDetail() {
   const paid = b.payment_status === "paid";
   const other = user?.role === "parent" ? b.tutor_name : b.parent_name;
   const canPay = user?.role === "parent" && !paid;
+  const canReview = user?.role === "parent" && paid && !hasReviewed;
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -81,6 +94,27 @@ export default function BookingDetail() {
           <Text style={styles.total}>${(b.amount_cents / 100).toFixed(2)}</Text>
           <Text style={styles.totalNote}>Includes childcare + language</Text>
         </View>
+
+        {canReview && (
+          <Pressable
+            testID="booking-rate-btn"
+            onPress={() => openReview({ bookingId: b.id, tutorId: b.tutor_id, tutorName: b.tutor_name })}
+            style={styles.rateCta}
+          >
+            <Feather name="star" size={20} color="#fff" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rateTitle}>Rate your session</Text>
+              <Text style={styles.rateSub}>Share a quick word about {b.tutor_name}</Text>
+            </View>
+            <Feather name="chevron-right" size={20} color="#fff" />
+          </Pressable>
+        )}
+        {user?.role === "parent" && paid && hasReviewed && (
+          <View style={styles.rateDone} testID="booking-already-rated">
+            <Feather name="check-circle" size={18} color={theme.color.success} />
+            <Text style={styles.rateDoneText}>Review submitted — thanks!</Text>
+          </View>
+        )}
       </ScrollView>
 
       {canPay && (
@@ -127,4 +161,21 @@ const styles = StyleSheet.create({
   total: { fontSize: 40, fontWeight: "700", color: theme.color.brand, letterSpacing: -1 },
   totalNote: { color: theme.color.onSurfaceSecondary, marginTop: 4 },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.lg, backgroundColor: theme.color.surface, borderTopWidth: 1, borderTopColor: theme.color.border },
+  rateCta: {
+    marginTop: theme.space.xl,
+    flexDirection: "row", alignItems: "center", gap: theme.space.md,
+    padding: theme.space.lg,
+    borderRadius: theme.radius.lg,
+    backgroundColor: theme.color.brand,
+  },
+  rateTitle: { color: "#fff", fontWeight: "700", fontSize: theme.font.lg },
+  rateSub: { color: "rgba(255,255,255,0.9)", marginTop: 2, fontSize: theme.font.sm },
+  rateDone: {
+    marginTop: theme.space.xl,
+    flexDirection: "row", alignItems: "center", gap: theme.space.sm,
+    padding: theme.space.md,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.color.surfaceSecondary,
+  },
+  rateDoneText: { color: theme.color.onSurface, fontWeight: "600" },
 });

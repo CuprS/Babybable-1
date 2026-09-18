@@ -1,0 +1,45 @@
+{
+  "summary": "Session-5 backend features fully verified: 10/10 pass in /app/backend/tests/test_babybabel_session5.py AND session-4 regression 18/18 still passes. Coverage: (A) Distance filter on GET /api/tutors — unauthenticated caller with max_miles=50 returns all tutors with distance_miles=None; authed parent (Madrid coords via PATCH /parents/me/profile with city='Madrid, ES', geocoded to 40.4168,-3.7035) sees Sofía ~316mi (Barcelona) and Marie ~623mi (Lyon) populated. max_miles=50 keeps Sofía (allows_remote=true + default include_remote=true) and drops Marie (allows_remote=false); max_miles=50&include_remote=false drops BOTH; max_miles=1000 keeps both; results ascending-sorted by distance_miles. (B) Invitation deep-link — POST /messages/invitation/{id}/accept sets invitation.status='accepted' and invitation.booking_id=<new booking id> on the parent-visible thread (GET /messages/thread/{sofia_user_id}); booking_id round-trips exactly. (C) Reviews — POST /api/reviews with {tutor_id, booking_id, rating, comment} returns 200; response includes booking_id; GET /api/reviews/tutor/{sofia_id} lists the new review with booking_id; tutors.rating and tutors.reviews_count reflect rolling average (validated 5.0/1 after single 5-star, then 4.0/2 after adding a 3-star). (D) _generate_dynamic_notifications — a paid booking whose end time is 90 min in the past yields a review:<booking_id> notification via GET /api/notifications when no review exists yet; if a review row is pre-inserted for that booking_id, the notification is SUPPRESSED (guard `db.reviews.find_one({booking_id: ...})` holds).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/tutors + PATCH /tutors/me/profile", "issue": "Tutor `locations` array accumulates across PATCH calls if the tutor edits their location — old locations aren't pruned, so distance_miles can bind to a stale/second location. Session-5 tests found Sofía had both Barcelona and Madrid in `locations` from a prior session, which zeroed her distance. Consider replacing (not merging) locations on PATCH, or de-duping by (rounded lat/lng). Non-blocking; suite pins locations back to canonical seed."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_babybabel_session5.py",
+    "/app/backend/tests/test_babybabel_session4.py",
+    "/app/test_reports/pytest/session5.xml",
+    "/app/test_reports/pytest/session4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 1572 lines — one route module per resource is overdue but not blocking.",
+    "GET /api/tutors distance-filter path scans up to 200 tutors and, for each parent request, re-fetches the parent doc and haversines every location — fine for MVP scale; add a compound index later or precompute distance for the top-N sort.",
+    "closest_distance() only falls back to doc.latitude/longitude when `locations` is missing OR every entry lacks lat. If a tutor has one Location doc with no lat AND a top-level lat, the code correctly falls back — verified via Marie (no locations, has top-level lat/lng).",
+    "The 'distance_miles' field on Booking (POST /bookings) uses the same closest-location loop as the tutor list — good code consistency, but note that the field is only populated when the parent HAS coords, and reflects distance at BOOKING TIME (won't auto-refresh if either party moves).",
+    "PATCH /parents/me/profile → maybe_geocode_and_persist relies on Nominatim (free tier, IP-rate-limited). If it fails, latitude/longitude stay None silently — the endpoint returns 200 either way. Consider surfacing a soft warning in the response or logging a metric. Suite has a 3-city fallback loop to handle flakiness.",
+    "_generate_dynamic_notifications race: two rapid GET /notifications calls can both see 'no review yet' and both insert the review:<id> notification. There's a follow-up `find_one` guard on the notification key, so the second insert is skipped — verified. Still, if the guard read races, you could get a duplicate; consider a unique index on (user_id, kind).",
+    "invitation.booking_id gets stamped via `$set` in db.messages.update_one — good. But the invitation.status check earlier (`inv.status != 'pending'`) means a re-accept race would 400, not double-book. Verified path.",
+    "The Review POST endpoint recomputes the tutor's rolling average from ALL reviews (`find(...).to_list(1000)`). Fine at MVP scale — worth adding a $inc-based cumulative sum in tutors doc when reviews exceed a few hundred.",
+    "Reviews collection has no uniqueness on (parent_id, booking_id) — same parent can leave multiple reviews for the same booking (test_c1 exercises this to validate rolling avg). Product may want to enforce single-review-per-booking; flag for main agent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_babybabel_session5.py (new — 10 tests covering distance filter, invitation booking_id, reviews CRUD + rating math, review-notification generation & suppression)"
+  ],
+  "success_rate": {
+    "backend": "100% — session-5: 10/10, session-4 regression: 18/18 (28/28 total)",
+    "frontend": "skipped per request"
+  },
+  "seed_data_creation": "The session-5 suite (a) PATCHes parent@test.dev to city='Madrid, ES' (falls back to 'Madrid, Spain' / 'Paris, FR' / 'New York, NY' if Nominatim doesn't geocode), (b) pins Sofía's tutor doc to a single Barcelona location (41.3874, 2.1686) + allows_remote=true + rating/reviews_count=(4.9,42) and Marie to Lyon (45.7640, 4.8357) + allows_remote=false, (c) resets Sofía's weekly_availability to {} for the invitation-accept test, (d) directly inserts past-in-time paid bookings via pymongo (server rejects past-slot POSTs). All test-created bookings/reviews/notifications are cleaned in the module-scoped autouse fixture.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run session-5 with `pytest backend/tests/test_babybabel_session5.py -v -n0`. If you also run session-4 in the same shell, session-4's rate-limit test (test_c4) burns parent@test.dev's login bucket (8/300s) — `sudo supervisorctl restart backend` between the two suites clears the in-memory rate buckets. Session-5's autouse fixture aggressively resets Sofía's & Marie's tutor docs and clears test-tagged bookings/reviews/notifications, so it's fully re-runnable. Nominatim can be flaky — the fixture already has 3 fallback cities.",
+  "rca_of_issue": "No open bugs. Two testing gotchas: (1) After prior test iterations, Sofía's `locations` array contained both Barcelona AND Madrid (from a previous PATCH that added Madrid without removing Barcelona) — this made her distance_miles=0 from Madrid, breaking tests a2 and a4. Fixed by pinning her canonical seed location + coords in the autouse fixture. This is also flagged as a minor backend issue (tutor location merge behaviour on PATCH). (2) The login rate-limit test in session-4 leaves parent@test.dev locked out — mitigation is a supervisor backend restart between suites (documented in context_for_next_testing_agent)."
+}

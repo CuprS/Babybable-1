@@ -169,10 +169,22 @@ export default function Chat() {
 
 function InvitationCard({ item, mine, onAccept, onDecline, amParent }: { item: Msg; mine: boolean; onAccept: () => void; onDecline: () => void; amParent: boolean }) {
   const inv = item.invitation!;
+  const router = useRouter();
   const price = (inv.price_cents / 100).toFixed(0);
   const statusColor = inv.status === "accepted" ? theme.color.success : inv.status === "declined" ? theme.color.error : theme.color.warning;
+  const isAccepted = inv.status === "accepted" && !!inv.booking_id;
+  const openReceipt = () => {
+    if (!inv.booking_id) return;
+    track("invitation_receipt_open", { message_id: item.id, booking_id: inv.booking_id });
+    router.push(`/booking-detail/${inv.booking_id}`);
+  };
   return (
-    <View style={[cardStyles.card, mine ? cardStyles.mine : cardStyles.theirs]} testID={`invitation-${item.id}`}>
+    <Pressable
+      onPress={isAccepted ? openReceipt : undefined}
+      disabled={!isAccepted}
+      style={[cardStyles.card, mine ? cardStyles.mine : cardStyles.theirs]}
+      testID={`invitation-${item.id}`}
+    >
       <View style={cardStyles.row}>
         <Feather name="calendar" size={16} color={theme.color.brand} />
         <Text style={cardStyles.title}>Lesson invitation</Text>
@@ -193,7 +205,14 @@ function InvitationCard({ item, mine, onAccept, onDecline, amParent }: { item: M
           </Pressable>
         </View>
       )}
-    </View>
+      {isAccepted && (
+        <View style={cardStyles.receiptCta} testID={`invitation-${item.id}-receipt`}>
+          <Feather name="file-text" size={14} color={theme.color.brand} />
+          <Text style={cardStyles.receiptText}>Tap to view booking receipt</Text>
+          <Feather name="chevron-right" size={14} color={theme.color.brand} />
+        </View>
+      )}
+    </Pressable>
   );
 }
 
@@ -352,6 +371,14 @@ const cardStyles = StyleSheet.create({
   action: { flex: 1, height: 44, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center" },
   actionGhost: { borderWidth: 1, borderColor: theme.color.borderStrong },
   actionAccept: { backgroundColor: theme.color.brand },
+  receiptCta: {
+    marginTop: theme.space.sm,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: theme.color.brandSoft,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.space.md, paddingVertical: 8,
+  },
+  receiptText: { flex: 1, color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.sm },
 });
 
 const sheetStyles = StyleSheet.create({

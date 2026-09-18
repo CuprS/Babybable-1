@@ -1,10 +1,11 @@
 import { useEffect, useState, useCallback } from "react";
-import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl, TextInput } from "react-native";
+import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl, TextInput, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import Slider from "@react-native-community/slider";
 import { apiFetch, fileUrl, Tutor } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
@@ -15,6 +16,7 @@ import { track } from "@/src/analytics";
 import { LiveMap, LiveMapMarker } from "@/src/livemap";
 
 const LANGUAGES = ["All", "Spanish", "French", "Japanese", "Mandarin", "German", "Arabic", "English", "Italian"];
+const DISTANCE_STEPS = [10, 25, 50, 100, 250, 500, 1000];
 
 export default function Explore() {
   const { user } = useAuth();
@@ -27,6 +29,10 @@ export default function Explore() {
   const [lang, setLang] = useState<string>("All");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
+  const [maxMilesIdx, setMaxMilesIdx] = useState<number>(-1); // -1 means "Any distance"
+  const [includeRemote, setIncludeRemote] = useState<boolean>(true);
+  const [parentHasCoords, setParentHasCoords] = useState<boolean>(false);
+  const [parentCity, setParentCity] = useState<string>("");
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q), 300);
@@ -38,11 +44,22 @@ export default function Explore() {
       const params = new URLSearchParams();
       if (lang !== "All") params.set("language", lang);
       if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
+      if (maxMilesIdx >= 0 && parentHasCoords) {
+        params.set("max_miles", String(DISTANCE_STEPS[maxMilesIdx]));
+        params.set("include_remote", String(includeRemote));
+      }
       const qs = params.toString();
       const data = await apiFetch<Tutor[]>(`/tutors${qs ? `?${qs}` : ""}`);
       setTutors(data);
-      if (debouncedQ.trim() || lang !== "All") {
-        track("search", { query_length: debouncedQ.trim().length, result_count: data.length, language: lang, source: "explore" });
+      if (debouncedQ.trim() || lang !== "All" || maxMilesIdx >= 0) {
+        track("search", {
+          query_length: debouncedQ.trim().length,
+          result_count: data.length,
+          language: lang,
+          max_miles: maxMilesIdx >= 0 ? DISTANCE_STEPS[maxMilesIdx] : null,
+          include_remote: includeRemote,
+          source: "explore",
+        });
       }
     } catch (e) {
       console.log("load tutors error", e);
@@ -50,7 +67,7 @@ export default function Explore() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [lang, debouncedQ]);
+  }, [lang, debouncedQ, maxMilesIdx, includeRemote, parentHasCoords]);
 
   const loadFavs = useCallback(async () => {
     if (user?.role !== "parent") return;
@@ -59,6 +76,15 @@ export default function Explore() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadFavs(); }, [loadFavs]);
+  useEffect(() => {
+    if (user?.role !== "parent") return;
+    apiFetch<{ latitude?: number | null; longitude?: number | null; city?: string }>("/parents/me/profile")
+      .then((p) => {
+        setParentHasCoords(p.latitude != null && p.longitude != null);
+        setParentCity(p.city || "");
+      })
+      .catch(() => {});
+  }, [user]);
   useEffect(() => {
     apiFetch<{ id: string; latitude: number; longitude: number; name: string; hourly_rate_cents?: number }[]>("/tutors/map")
       .then((rows) => setMapPins(rows.map((r) => ({
@@ -113,6 +139,63 @@ export default function Explore() {
             <Chip key={l} label={l === "All" ? "All" : `${flagFor(l)} ${l}`} selected={lang === l} onPress={() => setLang(l)} testID={`chip-${l.toLowerCase()}`} />
           ))}
         </ScrollView>
+        {user?.role === "parent" && (
+          <View style={styles.distanceBar} testID="distance-filter">
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Feather name="map-pin" size={14} color={theme.color.brand} />
+                <Text style={styles.distanceLabel} testID="distance-value">
+                  {parentHasCoords
+                    ? maxMilesIdx < 0
+                      ? "Any distance"
+                      : `Within ${DISTANCE_STEPS[maxMilesIdx]} miles`
+                    : "Set your city to filter by distance"}
+                </Text>
+              </View>
+              {parentHasCoords && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={styles.remoteLabel}>Include remote</Text>
+                  <Switch
+                    testID="distance-include-remote"
+                    value={includeRemote}
+                    onValueChange={setIncludeRemote}
+                    trackColor={{ true: theme.color.brand, false: theme.color.borderStrong }}
+                    thumbColor="#fff"
+                  />
+                </View>
+              )}
+            </View>
+            {parentHasCoords ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.sm, marginTop: 4 }}>
+                <Text style={styles.distanceEdge}>Any</Text>
+                <Slider
+                  testID="distance-slider"
+                  style={{ flex: 1, height: 32 }}
+                  minimumValue={-1}
+                  maximumValue={DISTANCE_STEPS.length - 1}
+                  step={1}
+                  value={maxMilesIdx}
+                  onSlidingComplete={(v) => setMaxMilesIdx(Math.round(v))}
+                  minimumTrackTintColor={theme.color.brand}
+                  maximumTrackTintColor={theme.color.borderStrong}
+                  thumbTintColor={theme.color.brand}
+                />
+                <Text style={styles.distanceEdge}>1000mi</Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => router.push("/edit-parent")}
+                style={{ marginTop: 6 }}
+                testID="distance-add-city"
+              >
+                <Text style={styles.distanceCta}>Add your city →</Text>
+              </Pressable>
+            )}
+            {parentHasCoords && !!parentCity && (
+              <Text style={styles.distanceCaption}>Distances from {parentCity}</Text>
+            )}
+          </View>
+        )}
       </SafeAreaView>
 
       {loading ? (
@@ -204,7 +287,10 @@ function TutorCard({ tutor, onPress, isFav, canFav, onFav }: { tutor: Tutor; onP
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginTop: theme.space.md }}>
         <View style={{ flex: 1 }}>
           <Text style={cardStyles.name} numberOfLines={1}>{tutor.name}</Text>
-          <Text style={cardStyles.meta} numberOfLines={1}>{tutor.location || "Location coming soon"}</Text>
+          <Text style={cardStyles.meta} numberOfLines={1}>
+            {tutor.location || "Location coming soon"}
+            {tutor.distance_miles != null ? ` · ${tutor.distance_miles} mi` : ""}
+          </Text>
           <Text style={cardStyles.langs} numberOfLines={1}>
             {tutor.languages.length ? tutor.languages.map((l) => `${flagFor(l)} ${l}`).join("  ·  ") : "Setting up profile"}
           </Text>
@@ -294,6 +380,16 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: theme.font.base, color: theme.color.onSurface, padding: 0 },
   chipsRow: { paddingVertical: theme.space.md, height: 56, flexGrow: 0 },
+  distanceBar: {
+    paddingHorizontal: theme.space.xl,
+    paddingBottom: theme.space.md,
+    gap: 2,
+  },
+  distanceLabel: { color: theme.color.onSurface, fontWeight: "600", fontSize: theme.font.sm },
+  remoteLabel: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, marginRight: 4 },
+  distanceEdge: { color: theme.color.muted, fontSize: 11, minWidth: 34, textAlign: "center" },
+  distanceCta: { color: theme.color.brand, fontWeight: "700" },
+  distanceCaption: { color: theme.color.muted, fontSize: 11, textAlign: "right" },
 });
 
 const cardStyles = StyleSheet.create({

@@ -320,6 +320,8 @@ class TutorProfile(BaseModel):
     # Values: sorted list of "HH:MM" slot starts the tutor is available.
     # Empty dict or empty list = "no restrictions set" (all slots open for backward compat).
     weekly_availability: dict = Field(default_factory=dict)
+    # Populated only by list_tutors when the caller is a parent with saved coordinates.
+    distance_miles: Optional[float] = None
 
 
 class TutorProfileUpdate(BaseModel):
@@ -485,6 +487,17 @@ async def current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
     if not user:
         raise HTTPException(401, "User not found")
     return user
+
+
+async def optional_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[dict]:
+    """Same as current_user but returns None (not 401) when no valid token."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        return await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
+    except Exception:
+        return None
 
 
 def user_to_public(u: dict) -> UserPublic:
@@ -665,7 +678,15 @@ async def maybe_geocode_and_persist(collection, filter_q: dict, location_str: st
 
 
 @api.get("/tutors", response_model=List[TutorProfile])
-async def list_tutors(q: Optional[str] = None, language: Optional[str] = None, min_rate: Optional[int] = None, max_rate: Optional[int] = None):
+async def list_tutors(
+    q: Optional[str] = None,
+    language: Optional[str] = None,
+    min_rate: Optional[int] = None,
+    max_rate: Optional[int] = None,
+    max_miles: Optional[float] = None,
+    include_remote: bool = True,
+    u: Optional[dict] = Depends(optional_user),
+):
     query: dict = {}
     if language:
         query["languages"] = {"$regex": f"^{language}$", "$options": "i"}
@@ -681,7 +702,46 @@ async def list_tutors(q: Optional[str] = None, language: Optional[str] = None, m
             {"languages": {"$regex": q, "$options": "i"}},
         ]
     docs = await db.tutors.find(query, {"_id": 0}).to_list(200)
-    return [tutor_doc_to_model(d) for d in docs]
+
+    # Distance filter — only when the caller is a parent with saved coordinates.
+    parent_coords = None
+    if u and u.get("role") == "parent":
+        p = await db.parents.find_one({"user_id": u["id"]}, {"_id": 0, "latitude": 1, "longitude": 1})
+        if p and p.get("latitude") is not None and p.get("longitude") is not None:
+            parent_coords = (p["latitude"], p["longitude"])
+
+    def closest_distance(doc: dict) -> Optional[float]:
+        if not parent_coords:
+            return None
+        best: Optional[float] = None
+        for loc in (doc.get("locations") or []):
+            if loc.get("latitude") is None:
+                continue
+            d = haversine_miles(parent_coords[0], parent_coords[1], loc["latitude"], loc["longitude"])
+            if best is None or d < best:
+                best = d
+        if best is None and doc.get("latitude") is not None:
+            best = haversine_miles(parent_coords[0], parent_coords[1], doc["latitude"], doc["longitude"])
+        return round(best, 1) if best is not None else None
+
+    out: List[TutorProfile] = []
+    for d in docs:
+        model = tutor_doc_to_model(d)
+        model.distance_miles = closest_distance(d)
+        if max_miles is not None and parent_coords is not None:
+            # Include remote-friendly tutors if the toggle is on.
+            if model.distance_miles is None:
+                if not (include_remote and model.allows_remote):
+                    continue
+            elif model.distance_miles > max_miles:
+                if not (include_remote and model.allows_remote):
+                    continue
+        out.append(model)
+
+    # Sort nearest-first when we have coords, else preserve DB order.
+    if parent_coords is not None:
+        out.sort(key=lambda t: (t.distance_miles is None, t.distance_miles or 0))
+    return out
 
 
 @api.get("/tutors/map")

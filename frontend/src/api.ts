@@ -91,6 +91,7 @@ export interface Tutor {
   hero_image_url?: string | null;
   is_new?: boolean;
   weekly_availability?: { [day: string]: string[] };
+  distance_miles?: number | null;
 }
 
 export interface Booking {

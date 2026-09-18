@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Dimensions } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -23,6 +23,8 @@ export default function TutorDetail() {
   const [tutor, setTutor] = useState<Tutor | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reviewFilter, setReviewFilter] = useState<"all" | "5" | "4+" | "3+" | "latest">("latest");
+  const [reviewsExpanded, setReviewsExpanded] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -31,6 +33,16 @@ export default function TutorDetail() {
       apiFetch<Review[]>(`/reviews/tutor/${id}`),
     ]).then(([t, r]) => { setTutor(t); setReviews(r); }).catch(() => {}).finally(() => setLoading(false));
   }, [id]);
+
+  const REVIEW_PAGE = 5;
+  const filteredReviews = useMemo(() => {
+    let list = [...reviews];
+    if (reviewFilter === "5") list = list.filter((r) => r.rating === 5);
+    else if (reviewFilter === "4+") list = list.filter((r) => r.rating >= 4);
+    else if (reviewFilter === "3+") list = list.filter((r) => r.rating >= 3);
+    // Latest = default newest-first (already from API), All = same.
+    return list;
+  }, [reviews, reviewFilter]);
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={theme.color.brand} /></View>;
   if (!tutor) return <View style={styles.center}><Text>Tutor not found</Text></View>;
@@ -125,22 +137,72 @@ export default function TutorDetail() {
             </>
           )}
 
-          <Text style={styles.section}>Reviews</Text>
+          <View style={styles.reviewsHeader}>
+            <Text style={[styles.section, { marginBottom: 0, marginTop: 0 }]}>Reviews {reviews.length > 0 ? `(${reviews.length})` : ""}</Text>
+            {tutor.rating > 0 && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <Feather name="star" size={14} color={theme.color.brand} />
+                <Text style={{ color: theme.color.onSurface, fontWeight: "700" }}>{tutor.rating.toFixed(1)}</Text>
+              </View>
+            )}
+          </View>
+          {reviews.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.sm, paddingBottom: theme.space.sm }}>
+              {(["latest", "all", "5", "4+", "3+"] as const).map((f) => {
+                const label = f === "latest" ? "Latest" : f === "all" ? "All" : f === "5" ? "5★ only" : f === "4+" ? "4★ & up" : "3★ & up";
+                const count = f === "5" ? reviews.filter((r) => r.rating === 5).length
+                  : f === "4+" ? reviews.filter((r) => r.rating >= 4).length
+                  : f === "3+" ? reviews.filter((r) => r.rating >= 3).length
+                  : reviews.length;
+                return (
+                  <Pressable
+                    key={f}
+                    testID={`review-filter-${f}`}
+                    onPress={() => { setReviewFilter(f); setReviewsExpanded(false); }}
+                    style={[
+                      styles.filterChip,
+                      reviewFilter === f && styles.filterChipOn,
+                    ]}
+                  >
+                    <Text style={[styles.filterChipText, reviewFilter === f && styles.filterChipTextOn]}>
+                      {label} · {count}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
           {reviews.length === 0 ? (
             <Text style={styles.muted}>No reviews yet. Be the first to book!</Text>
+          ) : filteredReviews.length === 0 ? (
+            <Text style={styles.muted}>No reviews matching this filter.</Text>
           ) : (
-            reviews.map((r) => (
-              <View key={r.id} style={styles.reviewCard}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={{ fontWeight: "700", color: theme.color.onSurface }}>{r.parent_name}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                    <Feather name="star" size={12} color={theme.color.brand} />
-                    <Text style={{ color: theme.color.onSurface, fontWeight: "600" }}>{r.rating}</Text>
+            <>
+              {(reviewsExpanded ? filteredReviews : filteredReviews.slice(0, REVIEW_PAGE)).map((r) => (
+                <View key={r.id} style={styles.reviewCard}>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                    <Text style={{ fontWeight: "700", color: theme.color.onSurface }}>{r.parent_name}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <Feather name="star" size={12} color={theme.color.brand} />
+                      <Text style={{ color: theme.color.onSurface, fontWeight: "600" }}>{r.rating}</Text>
+                    </View>
                   </View>
+                  {r.comment ? <Text style={{ color: theme.color.onSurfaceSecondary, marginTop: 6 }}>{r.comment}</Text> : null}
                 </View>
-                <Text style={{ color: theme.color.onSurfaceSecondary, marginTop: 6 }}>{r.comment}</Text>
-              </View>
-            ))
+              ))}
+              {filteredReviews.length > REVIEW_PAGE && (
+                <Pressable
+                  onPress={() => setReviewsExpanded((v) => !v)}
+                  style={styles.showMore}
+                  testID="reviews-show-more"
+                >
+                  <Text style={styles.showMoreText}>
+                    {reviewsExpanded ? "Show less" : `Show all ${filteredReviews.length} reviews`}
+                  </Text>
+                  <Feather name={reviewsExpanded ? "chevron-up" : "chevron-down"} size={16} color={theme.color.brand} />
+                </Pressable>
+              )}
+            </>
           )}
         </View>
       </ScrollView>
@@ -213,6 +275,27 @@ const styles = StyleSheet.create({
   locChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: theme.space.md, paddingVertical: 6, borderRadius: theme.radius.pill, backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand },
   locChipText: { color: theme.color.brandDark, fontWeight: "600", fontSize: 13 },
   reviewCard: { padding: theme.space.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, marginBottom: theme.space.sm },
+  reviewsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: theme.space["2xl"],
+    marginBottom: theme.space.md,
+  },
+  filterChip: {
+    paddingHorizontal: theme.space.md, paddingVertical: 8,
+    borderRadius: theme.radius.pill,
+    borderWidth: 1, borderColor: theme.color.borderStrong,
+    backgroundColor: theme.color.surface,
+  },
+  filterChipOn: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
+  filterChipText: { color: theme.color.onSurface, fontWeight: "600", fontSize: theme.font.sm },
+  filterChipTextOn: { color: "#fff" },
+  showMore: {
+    flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 6,
+    paddingVertical: theme.space.md,
+  },
+  showMoreText: { color: theme.color.brand, fontWeight: "700", fontSize: theme.font.base },
   muted: { color: theme.color.onSurfaceSecondary },
   topBar: {
     position: "absolute", top: 0, left: 0, right: 0,

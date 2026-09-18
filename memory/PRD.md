@@ -33,6 +33,9 @@
 - [x] **Auth hardening (P3)** — signup/login rate limited per IP, generic duplicate-email response prevents enumeration, minimum password length 8.
 - [x] **Interactive tutor map on Explore** — Leaflet + OpenStreetMap in a WebView (native) / iframe (web), tap any pin to open the tutor. No API key required.
 - [x] **1% platform fee** — every paid booking adds a 1% premium credited to a `platform_earnings` ledger; admin dashboard shows total earnings and recent fee entries.
+- [x] **Distance filter on Explore** — parent city auto-geocodes → slider (10/25/50/100/250/500/1000 mi) + "Include remote" toggle; cards show `distance_miles`; results sorted nearest-first.
+- [x] **Chat → booking-receipt deep link** — an accepted lesson-invitation card in chat is tappable and opens `/booking-detail/{booking_id}`.
+- [x] **Rate-session bottom-sheet** — 5-star tap-scale animated composer with quick label ("Loved it 💫"), textarea and post-review flow. Auto-opens after the server posts a `review:<booking_id>` notification (30 min after session); also reachable via a "Rate your session" CTA on the paid booking receipt. Tutor profile now has filter chips (Latest / All / 5★ / 4★+ / 3★+) with a "Show all N reviews" expander (5 at a time).
 
 ## MOCKED / Deferred
 - Stripe PaymentSheet remains MOCKED — backend creates real PaymentIntent when a valid key is set, else falls back. Ready to swap in `@stripe/stripe-react-native` PaymentSheet on the first EAS dev build.

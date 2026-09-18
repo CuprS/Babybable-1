@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from "@/src/auth";
 import { DrawerProvider } from "@/src/drawer";
 import { ToastProvider } from "@/src/toast";
 import { NotificationsWatcher } from "@/src/notifications";
+import { ReviewPromptProvider } from "@/src/reviewprompt";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -68,10 +69,12 @@ export default function RootLayout() {
         <StatusBar barStyle="dark-content" backgroundColor="#FAF8F5" />
         <AuthProvider>
           <ToastProvider>
-            <DrawerProvider>
-              <NotificationsWatcher />
-              <AuthGate />
-            </DrawerProvider>
+            <ReviewPromptProvider>
+              <DrawerProvider>
+                <NotificationsWatcher />
+                <AuthGate />
+              </DrawerProvider>
+            </ReviewPromptProvider>
           </ToastProvider>
         </AuthProvider>
       </SafeAreaProvider>
