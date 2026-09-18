@@ -347,6 +347,7 @@ class BookingCreate(BaseModel):
     notes: Optional[str] = ""
     is_au_pair: bool = False
     lessons_count: int = Field(default=1, ge=1, le=200)
+    housing_offered: Optional[str] = Field(default="", max_length=800)
 
 
 class Booking(BaseModel):
@@ -370,6 +371,7 @@ class Booking(BaseModel):
     lessons_count: int = 1
     distance_miles: Optional[float] = None
     remote: bool = False
+    housing_offered: Optional[str] = ""
     created_at: str
 
 
@@ -914,6 +916,7 @@ async def create_booking(body: BookingCreate, u: dict = Depends(current_user)):
         "lessons_count": lessons,
         "distance_miles": distance,
         "remote": remote and not au_pair,
+        "housing_offered": (body.housing_offered or "").strip() if au_pair else "",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     # Create Stripe PaymentIntent
@@ -1098,6 +1101,7 @@ async def accept_invitation(message_id: str, u: dict = Depends(current_user)):
         "lessons_count": 1,
         "distance_miles": None,
         "remote": bool(t.get("allows_remote")),
+        "housing_offered": "",
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     # Stripe PaymentIntent (best-effort)
@@ -1411,7 +1415,7 @@ async def admin_users(u: dict = Depends(require_admin), limit: int = 100):
 
 
 async def _generate_dynamic_notifications(u: dict):
-    """Create booking-reminder (2h before) and review-request (after session) notifications on demand."""
+    """Create morning-of, 2h-before, and post-session review notifications on demand."""
     now = datetime.now(timezone.utc)
     # Reminders + review requests for parent's bookings
     if u["role"] == "parent":
@@ -1422,6 +1426,17 @@ async def _generate_dynamic_notifications(u: dict):
             except Exception:
                 continue
             delta_min = (dt - now).total_seconds() / 60
+            # Morning-of reminder: fires once when the session is TODAY and still upcoming (delta > 10 min).
+            same_day = dt.date() == now.date()
+            if same_day and 10 < delta_min < 24 * 60:
+                key = f"morning:{b['id']}"
+                if not await db.notifications.find_one({"user_id": u["id"], "kind": key}):
+                    await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()), "user_id": u["id"], "kind": key,
+                        "title": f"Session today at {b['time']}",
+                        "body": f"{b['tutor_name']} · {b['language']} · tap to get ready",
+                        "read": False, "at": now.isoformat(),
+                    })
             # 2-hour reminder (fires once when within 120 min and > -30 min)
             if -30 < delta_min < 120:
                 key = f"reminder:{b['id']}"

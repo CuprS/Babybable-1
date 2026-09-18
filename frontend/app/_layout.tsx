@@ -11,6 +11,7 @@ import { DrawerProvider } from "@/src/drawer";
 import { ToastProvider } from "@/src/toast";
 import { NotificationsWatcher } from "@/src/notifications";
 import { ReviewPromptProvider } from "@/src/reviewprompt";
+import { SessionReminderProvider } from "@/src/sessionreminder";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -70,10 +71,12 @@ export default function RootLayout() {
         <AuthProvider>
           <ToastProvider>
             <ReviewPromptProvider>
-              <DrawerProvider>
-                <NotificationsWatcher />
-                <AuthGate />
-              </DrawerProvider>
+              <SessionReminderProvider>
+                <DrawerProvider>
+                  <NotificationsWatcher />
+                  <AuthGate />
+                </DrawerProvider>
+              </SessionReminderProvider>
             </ReviewPromptProvider>
           </ToastProvider>
         </AuthProvider>

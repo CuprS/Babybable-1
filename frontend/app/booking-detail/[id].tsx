@@ -71,6 +71,9 @@ export default function BookingDetail() {
           <Row icon="clock" label="Duration" value={`${b.duration_minutes} min`} />
           <Row icon="book-open" label="Language" value={b.language} />
           {b.is_au_pair && <Row icon="home" label="Booking type" value={`Au-pair · ${b.lessons_count} lessons`} />}
+          {b.is_au_pair && !!b.housing_offered && (
+            <Row icon="home" label="Housing offered" value={b.housing_offered} />
+          )}
           {!b.is_au_pair && b.remote && <Row icon="video" label="Booking type" value="Remote" />}
           {!b.is_au_pair && !b.remote && <Row icon="map-pin" label="Booking type" value="In-person"
             extra={b.distance_miles != null ? `${b.distance_miles} mi away` : undefined} />}

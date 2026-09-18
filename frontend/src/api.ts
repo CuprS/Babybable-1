@@ -109,6 +109,11 @@ export interface Booking {
   currency: string;
   payment_status: string;
   notes?: string;
+  is_au_pair?: boolean;
+  lessons_count?: number;
+  distance_miles?: number | null;
+  remote?: boolean;
+  housing_offered?: string;
   created_at: string;
 }
 

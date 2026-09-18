@@ -36,6 +36,8 @@
 - [x] **Distance filter on Explore** — parent city auto-geocodes → slider (10/25/50/100/250/500/1000 mi) + "Include remote" toggle; cards show `distance_miles`; results sorted nearest-first.
 - [x] **Chat → booking-receipt deep link** — an accepted lesson-invitation card in chat is tappable and opens `/booking-detail/{booking_id}`.
 - [x] **Rate-session bottom-sheet** — 5-star tap-scale animated composer with quick label ("Loved it 💫"), textarea and post-review flow. Auto-opens after the server posts a `review:<booking_id>` notification (30 min after session); also reachable via a "Rate your session" CTA on the paid booking receipt. Tutor profile now has filter chips (Latest / All / 5★ / 4★+ / 3★+) with a "Show all N reviews" expander (5 at a time).
+- [x] **Au-pair Housing offered** — brand-tinted, character-counted textarea that appears only when the parent picks "Au-pair" on the booking screen. Server discards on single-session bookings. Rendered as its own row on the booking receipt for both sides.
+- [x] **Morning-of Session Reminder** — server emits `morning:<booking_id>` on the day of a paid session; the NotificationsWatcher opens a warm "Session today" bottom sheet with **Get directions** (opens the native Maps app / Google Maps in web) and **Message tutor** (jumps to the chat thread). Falls back gracefully for remote lessons and unpinned tutor locations.
 
 ## MOCKED / Deferred
 - Stripe PaymentSheet remains MOCKED — backend creates real PaymentIntent when a valid key is set, else falls back. Ready to swap in `@stripe/stripe-react-native` PaymentSheet on the first EAS dev build.

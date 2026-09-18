@@ -41,6 +41,7 @@ export default function BookingScreen() {
   const [duration, setDuration] = useState(60);
   const [notes, setNotes] = useState("");
   const [isAuPair, setIsAuPair] = useState(false);
+  const [housing, setHousing] = useState("");
   const [lessons, setLessons] = useState(1);
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
@@ -88,9 +89,10 @@ export default function BookingScreen() {
         body: JSON.stringify({
           tutor_id: tutor.id, date, time, duration_minutes: duration, language, notes,
           is_au_pair: isAuPair, lessons_count: effectiveLessons,
+          housing_offered: isAuPair ? housing.trim() : "",
         }),
       });
-      track("booking_submitted", { booking_id: b.id, tutor_id: tutor.id, language, duration_minutes: duration, is_au_pair: isAuPair, lessons: effectiveLessons });
+      track("booking_submitted", { booking_id: b.id, tutor_id: tutor.id, language, duration_minutes: duration, is_au_pair: isAuPair, lessons: effectiveLessons, housing_len: isAuPair ? housing.trim().length : 0 });
       router.replace(`/booking-detail/${b.id}`);
     } catch (e: any) {
       setError(e?.message || "Booking failed");
@@ -203,6 +205,27 @@ export default function BookingScreen() {
             </View>
           </View>
         )}
+        {isAuPair && (
+          <View style={styles.housingBlock} testID="booking-housing">
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <Feather name="home" size={16} color={theme.color.brandDark} />
+              <Text style={styles.housingLabel}>Housing offered</Text>
+              <Text style={styles.housingOpt}>optional</Text>
+            </View>
+            <Text style={styles.housingHint}>Give the tutor a warm sense of where they&apos;ll live — private room, meals included, family pets, etc.</Text>
+            <TextInput
+              testID="booking-housing-input"
+              multiline
+              value={housing}
+              onChangeText={setHousing}
+              placeholder="e.g. Private ensuite room, meals included, family of 4 + one friendly dog…"
+              placeholderTextColor={theme.color.muted}
+              style={styles.housingInput}
+              maxLength={800}
+            />
+            <Text style={styles.housingCount}>{housing.trim().length}/800</Text>
+          </View>
+        )}
         {!isAuPair && tutor.allows_remote && (
           <View style={styles.hint} testID="booking-remote-hint">
             <Feather name="video" size={14} color={theme.color.brandDark} />
@@ -272,6 +295,29 @@ const styles = StyleSheet.create({
   dateDay: { color: theme.color.onSurface, fontSize: 22, fontWeight: "700", marginTop: 2 },
   dateMonth: { color: theme.color.onSurfaceSecondary, fontSize: 11 },
   notes: { minHeight: 80, borderWidth: 1, borderColor: theme.color.border, borderRadius: theme.radius.md, padding: theme.space.md, textAlignVertical: "top", color: theme.color.onSurface },
+  housingBlock: {
+    marginTop: theme.space.md,
+    padding: theme.space.lg,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.color.brand,
+    backgroundColor: theme.color.brandSoft,
+    gap: 4,
+  },
+  housingLabel: { color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.lg, flex: 1 },
+  housingOpt: { color: theme.color.brandDark, opacity: 0.75, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5 },
+  housingHint: { color: theme.color.brandDark, opacity: 0.85, fontSize: theme.font.sm, marginBottom: 6 },
+  housingInput: {
+    minHeight: 96,
+    borderWidth: 1,
+    borderColor: theme.color.brand,
+    borderRadius: theme.radius.md,
+    padding: theme.space.md,
+    color: theme.color.onSurface,
+    textAlignVertical: "top",
+    backgroundColor: theme.color.surface,
+  },
+  housingCount: { color: theme.color.brandDark, opacity: 0.65, fontSize: 11, textAlign: "right" },
   summary: { marginTop: theme.space.xl, backgroundColor: theme.color.surfaceSecondary, padding: theme.space.lg, borderRadius: theme.radius.lg, gap: theme.space.sm },
   summaryTitle: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface, marginBottom: theme.space.xs },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.lg, backgroundColor: theme.color.surface, borderTopWidth: 1, borderTopColor: theme.color.border },

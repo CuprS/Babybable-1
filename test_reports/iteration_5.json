@@ -1,0 +1,39 @@
+{
+  "summary": "Session-6 backend features fully verified: 8/8 pass in /app/backend/tests/test_babybabel_session6.py, plus session-5 regression 10/10 and session-4 regression 18/18 (36/36 total). Coverage: (A) housing_offered on POST /api/bookings — (a1) non-au-pair booking with housing_offered='private room' returns Booking.housing_offered='' (server discards it via `(body.housing_offered or '').strip() if au_pair else ''`), also verified via GET /api/bookings/{id}; (a2) au-pair booking (is_au_pair=true, lessons_count=30, housing_offered='Private ensuite, meals included, one friendly dog') round-trips the exact string on POST response, GET /api/bookings/{id}, AND GET /api/bookings/me; (a3) housing_offered='x'*801 returns 422 (Pydantic max_length=800); (a4) housing_offered key omitted → 200 with default ''. (B) Morning-of reminder in _generate_dynamic_notifications — (b1) paid booking today at now+4h yields exactly one morning:<booking_id> notification with title 'Session today at HH:MM' and body containing tutor name 'Sofía García'; a second GET /api/notifications does NOT create a duplicate (dedupe guard on kind holds); (b2) booking on now+3d+2h → no morning: notif (same_day guard); (b3) booking 15 min in the past → no morning: notif (delta_min > 10 guard); (b4) paid booking at now+60min yields BOTH morning:<id> (once) AND reminder:<id> (once) — the 2h reminder logic still fires unchanged alongside the new morning-of.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_babybabel_session6.py",
+    "/app/test_reports/pytest/session6.xml",
+    "/app/test_reports/pytest/session5.xml",
+    "/app/test_reports/pytest/session4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:919 — `(body.housing_offered or '').strip() if au_pair else ''` correctly discards housing_offered for non-au-pair bookings. Consider whether silently discarding vs returning a 400/warning better serves UX: a parent who fills housing while forgetting to toggle au-pair loses data without feedback. Non-blocking.",
+    "server.py:1430-1439 — morning-of guard `same_day and 10 < delta_min < 24*60`: the upper bound (24*60) is redundant since same_day already implies delta_min < 24h. The 10-min lower bound correctly excludes past/imminent bookings. Dedupe via `find_one({user_id, kind: 'morning:<id>'})` before insert works — same race concern as the review notif (two concurrent GETs could both see missing key and both insert), but a follow-up `find_one` on the exact key is idempotent enough for MVP. Consider a unique index on (user_id, kind) collection-wide.",
+    "server.py:1441 — 2-hour reminder uses `-30 < delta_min < 120` overlapping the morning-of window (both fire when the session is <2h away). Product intent is likely: both, to nudge twice. Verified in test_b4.",
+    "server.py:350 — `housing_offered: Optional[str] = Field(default='', max_length=800)` — Pydantic correctly enforces the 800-char cap and defaults to ''. No whitespace stripping on the input, but line 919 strips before persist. Slightly inconsistent: an 800-char string with trailing whitespace passes validation, then gets trimmed. Non-blocking.",
+    "server.py is now 1587 lines — splitting into routers (bookings/notifications/reviews/tutors/messages) is overdue but still non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_babybabel_session6.py (new — 8 tests covering housing_offered persistence rules + morning-of reminder generation, dedupe, and coexistence with 2h reminder)"
+  ],
+  "success_rate": {
+    "backend": "100% — session-6: 8/8, session-5 regression: 10/10, session-4 regression: 18/18 (36/36 total)",
+    "frontend": "skipped per request"
+  },
+  "seed_data_creation": "Session-6 module-scoped autouse fixture: (a) pins Sofía's tutor doc (id from user_id lookup) to Barcelona (41.3874, 2.1686), allows_remote=True, and RESETS weekly_availability={} so any HH:MM slot passes the availability check for the housing tests; (b) PATCHes parent@test.dev to city='Barcelona, ES' with Madrid/Paris/NY fallbacks if Nominatim flakes (parent coords aren't strictly needed since Sofia allows_remote, but keeps distance_miles populated); (c) deletes stale test-tagged bookings (notes ^TEST_SESSION6) and any morning:/reminder:/review: notifications for parent uid before + after run. Past/today paid bookings for the notification tests are injected directly via pymongo (server rejects past dates at the POST layer). All test artifacts are cleaned in teardown; suite is fully re-runnable.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run session-6 with `pytest backend/tests/test_babybabel_session6.py -v -n0`. Suite is fully idempotent; runs in ~3s. IMPORTANT interactions with other suites in the same shell: (1) session-4's rate-limit test (test_c4) burns parent@test.dev's login rate bucket — always `sudo supervisorctl restart backend` between session-4 and any other suite. (2) session-5 pins Sofia's tutor doc to specific coords + allows_remote=True + rating=4.9/count=42 — session-6 resets these too, so order doesn't matter. (3) Morning-of tests are UTC-sensitive: if the test clock is within 4h of UTC midnight, test_b1 auto-falls back to now+30min (still same day + >10min future). test_b4 explicitly skips if now+60min crosses midnight. No open bugs. `_generate_dynamic_notifications` is invoked on every GET /api/notifications, so idempotency is critical and was verified.",
+  "rca_of_issue": "No open bugs found in this session. Note for future reference: the morning-of notification key format is `morning:<booking_id>`, mirroring `reminder:<booking_id>` and `review:<booking_id>`. The dedupe guard reads `db.notifications.find_one({user_id, kind: key})` before insert, so a second GET /notifications on the same booking is a no-op. Concurrent GETs from the same user could theoretically double-insert (read-race), but no unique index enforces this at the DB level; recommend `(user_id, kind)` unique index if this becomes a support issue."
+}
