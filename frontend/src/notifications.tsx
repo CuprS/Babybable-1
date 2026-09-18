@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { router } from "expo-router";
 import { apiFetch, Booking, Tutor } from "./api";
 import { useAuth } from "./auth";
 import { useToast } from "./toast";
@@ -53,7 +54,13 @@ export function NotificationsWatcher() {
         const fresh = list.filter((n) => n.at > seen);
         if (fresh.length && seen) {
           fresh.slice(-3).reverse().forEach((n) => {
-            show({ kind: n.kind === "chat" ? "info" : "success", title: n.title, body: n.body });
+            const isW9 = n.kind === "w9:required";
+            show({
+              kind: isW9 ? "info" : n.kind === "chat" ? "info" : "success",
+              title: n.title,
+              body: n.body,
+              action: isW9 ? { label: "Fill W-9", onPress: () => router.push("/w9") } : undefined,
+            });
           });
         }
         if (user.role === "parent") {

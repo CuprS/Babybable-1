@@ -21,6 +21,7 @@ import io
 import math
 import time
 import threading
+import base64
 from collections import defaultdict, deque
 
 ROOT_DIR = Path(__file__).parent
@@ -457,6 +458,55 @@ class Review(BaseModel):
     rating: int
     comment: str
     created_at: str
+
+
+# ---- W-9 Tax form ----
+class W9FormIn(BaseModel):
+    # Line 1
+    legal_name: str = Field(min_length=1, max_length=140)
+    # Line 2 (DBA / business name)
+    business_name: Optional[str] = Field(default="", max_length=140)
+    # Line 3 — federal tax classification
+    tax_classification: str  # one of: individual, sole_proprietor, c_corp, s_corp, partnership, trust_estate, llc, other
+    llc_tax_class: Optional[str] = Field(default="", max_length=1)  # C, S, or P (only if llc)
+    other_classification: Optional[str] = Field(default="", max_length=80)
+    # Line 5 & 6 — address
+    address: str = Field(min_length=1, max_length=200)
+    city: str = Field(min_length=1, max_length=80)
+    state: str = Field(min_length=1, max_length=40)
+    zip_code: str = Field(min_length=1, max_length=20)
+    country: Optional[str] = Field(default="US", max_length=40)
+    # Part I — Taxpayer ID
+    tin_type: str  # "ssn" or "ein"
+    tin: str = Field(min_length=5, max_length=20)
+    # Part II — signature (typed)
+    signature_name: str = Field(min_length=1, max_length=140)
+    is_us_person: bool = True
+    exempt_from_backup: bool = False
+
+
+class W9Form(BaseModel):
+    id: str
+    tutor_user_id: str
+    tutor_name: str
+    tutor_email: str
+    legal_name: str
+    business_name: str = ""
+    tax_classification: str
+    llc_tax_class: str = ""
+    other_classification: str = ""
+    address: str
+    city: str
+    state: str
+    zip_code: str
+    country: str = "US"
+    tin_type: str
+    tin_masked: str  # last-4 only for admin list view
+    signature_name: str
+    is_us_person: bool
+    exempt_from_backup: bool
+    signed_at: str
+    updated_at: str
 
 
 # ---- Auth helpers ----
@@ -1220,6 +1270,130 @@ async def tutor_reviews(tutor_id: str):
     return [Review(**d) for d in docs]
 
 
+# ---- W-9 tax forms ----
+def _mask_tin(t: str) -> str:
+    digits = "".join(ch for ch in (t or "") if ch.isdigit())
+    if len(digits) < 4:
+        return "•" * len(digits)
+    return "•" * (len(digits) - 4) + digits[-4:]
+
+
+def w9_public(doc: dict) -> W9Form:
+    """Strip encrypted TIN before returning to any caller."""
+    safe = {k: v for k, v in doc.items() if k not in ("tin_encrypted", "_id")}
+    return W9Form(**safe)
+
+
+async def tutor_has_completed_session(user_id: str) -> Optional[dict]:
+    """Return the earliest completed paid booking for this tutor (or None)."""
+    tutor = await db.tutors.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
+    if not tutor:
+        return None
+    now = datetime.now(timezone.utc)
+    docs = await db.bookings.find(
+        {"tutor_id": tutor["id"], "payment_status": "paid"},
+        {"_id": 0}
+    ).sort("date", 1).to_list(200)
+    for b in docs:
+        try:
+            dt = datetime.fromisoformat(f"{b['date']}T{b['time']}:00+00:00")
+        except Exception:
+            continue
+        end = dt + timedelta(minutes=int(b.get("duration_minutes") or 60))
+        if end < now:
+            return b
+    return None
+
+
+@api.post("/w9", response_model=W9Form, status_code=201)
+async def submit_w9(body: W9FormIn, u: dict = Depends(current_user)):
+    if u.get("role") != "tutor":
+        raise HTTPException(403, "Only tutors submit W-9 forms")
+    valid = {"individual", "sole_proprietor", "c_corp", "s_corp", "partnership", "trust_estate", "llc", "other"}
+    if body.tax_classification not in valid:
+        raise HTTPException(422, "Invalid federal tax classification")
+    if body.tin_type not in ("ssn", "ein"):
+        raise HTTPException(422, "tin_type must be 'ssn' or 'ein'")
+    tin_digits = "".join(ch for ch in body.tin if ch.isdigit())
+    if body.tin_type == "ssn" and len(tin_digits) != 9:
+        raise HTTPException(422, "SSN must be 9 digits")
+    if body.tin_type == "ein" and len(tin_digits) != 9:
+        raise HTTPException(422, "EIN must be 9 digits")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    existing = await db.w9_forms.find_one({"tutor_user_id": u["id"]})
+    doc = {
+        "id": (existing or {}).get("id") or str(uuid.uuid4()),
+        "tutor_user_id": u["id"],
+        "tutor_name": u["name"],
+        "tutor_email": u["email"],
+        "legal_name": body.legal_name.strip(),
+        "business_name": (body.business_name or "").strip(),
+        "tax_classification": body.tax_classification,
+        "llc_tax_class": (body.llc_tax_class or "").upper() if body.tax_classification == "llc" else "",
+        "other_classification": (body.other_classification or "").strip() if body.tax_classification == "other" else "",
+        "address": body.address.strip(),
+        "city": body.city.strip(),
+        "state": body.state.strip(),
+        "zip_code": body.zip_code.strip(),
+        "country": (body.country or "US").strip(),
+        "tin_type": body.tin_type,
+        "tin_masked": _mask_tin(tin_digits),
+        # Store the raw TIN under an "encrypted" key. In a real prod system, use KMS + envelope encryption.
+        # Here we obfuscate with base64 so it's not casually readable. It is NEVER returned by any endpoint.
+        "tin_encrypted": base64.b64encode(tin_digits.encode()).decode(),
+        "signature_name": body.signature_name.strip(),
+        "is_us_person": bool(body.is_us_person),
+        "exempt_from_backup": bool(body.exempt_from_backup),
+        "signed_at": (existing or {}).get("signed_at") or now_iso,
+        "updated_at": now_iso,
+    }
+    await db.w9_forms.update_one({"tutor_user_id": u["id"]}, {"$set": doc}, upsert=True)
+    # Mark any pending w9-required notifications as read.
+    await db.notifications.update_many(
+        {"user_id": u["id"], "kind": {"$regex": "^w9:"}},
+        {"$set": {"read": True}},
+    )
+    return w9_public(doc)
+
+
+@api.get("/w9/me", response_model=Optional[W9Form])
+async def my_w9(u: dict = Depends(current_user)):
+    if u.get("role") != "tutor":
+        raise HTTPException(403, "Only tutors have W-9 forms")
+    doc = await db.w9_forms.find_one({"tutor_user_id": u["id"]}, {"_id": 0})
+    return w9_public(doc) if doc else None
+
+
+@api.get("/w9/me/status")
+async def my_w9_status(u: dict = Depends(current_user)):
+    """Lightweight status endpoint used by the tutor UI to decide whether to nudge the tutor."""
+    if u.get("role") != "tutor":
+        return {"required": False, "submitted": False, "completed_session": False}
+    submitted = bool(await db.w9_forms.find_one({"tutor_user_id": u["id"]}, {"_id": 0, "id": 1}))
+    first_completed = await tutor_has_completed_session(u["id"])
+    return {
+        "required": bool(first_completed) and not submitted,
+        "submitted": submitted,
+        "completed_session": bool(first_completed),
+        "first_booking_id": (first_completed or {}).get("id"),
+    }
+
+
+@api.get("/admin/w9", response_model=List[W9Form])
+async def admin_list_w9(u: dict = Depends(require_admin), limit: int = 200):
+    docs = await db.w9_forms.find({}, {"_id": 0}).sort("updated_at", -1).to_list(limit)
+    return [w9_public(d) for d in docs]
+
+
+@api.get("/admin/w9/{tutor_user_id}", response_model=W9Form)
+async def admin_get_w9(tutor_user_id: str, u: dict = Depends(require_admin)):
+    doc = await db.w9_forms.find_one({"tutor_user_id": tutor_user_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(404, "W-9 not found for that tutor")
+    return w9_public(doc)
+
+
 # ---- Parent profile ----
 def parent_doc_to_model(p: dict, name: str) -> ParentProfile:
     return ParentProfile(
@@ -1417,6 +1591,20 @@ async def admin_users(u: dict = Depends(require_admin), limit: int = 100):
 async def _generate_dynamic_notifications(u: dict):
     """Create morning-of, 2h-before, and post-session review notifications on demand."""
     now = datetime.now(timezone.utc)
+    # W-9 nudge for tutors after their first completed paid session (once).
+    if u["role"] == "tutor":
+        submitted = await db.w9_forms.find_one({"tutor_user_id": u["id"]}, {"_id": 0, "id": 1})
+        if not submitted:
+            first_done = await tutor_has_completed_session(u["id"])
+            if first_done:
+                key = "w9:required"
+                if not await db.notifications.find_one({"user_id": u["id"], "kind": key}):
+                    await db.notifications.insert_one({
+                        "id": str(uuid.uuid4()), "user_id": u["id"], "kind": key,
+                        "title": "Complete your W-9 (US tax form)",
+                        "body": "You've completed your first session — file a W-9 so we can pay you.",
+                        "read": False, "at": now.isoformat(),
+                    })
     # Reminders + review requests for parent's bookings
     if u["role"] == "parent":
         bookings = await db.bookings.find({"parent_id": u["id"], "payment_status": "paid"}, {"_id": 0}).to_list(200)

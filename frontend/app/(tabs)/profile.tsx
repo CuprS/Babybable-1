@@ -114,6 +114,17 @@ export default function Profile() {
             <Feather name="chevron-right" size={20} color={theme.color.muted} />
           </Pressable>
         )}
+        {user.role === "tutor" && (
+          <Pressable
+            testID="profile-w9-btn"
+            onPress={() => router.push("/w9")}
+            style={styles.row}
+          >
+            <Feather name="file-text" size={20} color={theme.color.onSurface} />
+            <Text style={styles.rowText}>Tax forms (W-9)</Text>
+            <Feather name="chevron-right" size={20} color={theme.color.muted} />
+          </Pressable>
+        )}
         {user.role === "parent" && (
           <Pressable
             testID="profile-edit-parent-btn"
