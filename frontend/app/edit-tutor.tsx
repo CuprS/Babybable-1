@@ -10,6 +10,8 @@ import { apiFetch, apiUpload, fileUrl, Tutor } from "@/src/api";
 import { theme } from "@/src/theme";
 import { Button, Input } from "@/src/ui";
 import { useToast } from "@/src/toast";
+import { AvailabilityGrid } from "@/src/AvailabilityGrid";
+import { WeeklyAvailability } from "@/src/availability";
 
 export default function EditTutor() {
   const router = useRouter();
@@ -22,6 +24,7 @@ export default function EditTutor() {
   const [rate, setRate] = useState("30");
   const [langs, setLangs] = useState<string[]>([]);
   const [langInput, setLangInput] = useState("");
+  const [availability, setAvailability] = useState<WeeklyAvailability>({});
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -34,6 +37,7 @@ export default function EditTutor() {
       setExperience(String(t.experience_years));
       setRate(String(Math.round(t.hourly_rate_cents / 100)));
       setLangs(t.languages);
+      setAvailability((t.weekly_availability as WeeklyAvailability) || {});
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -107,6 +111,7 @@ export default function EditTutor() {
           languages: langs,
           locations,
           allows_remote: !!tutor?.allows_remote,
+          weekly_availability: availability,
         }),
       });
       setTutor(updated);
@@ -202,6 +207,10 @@ export default function EditTutor() {
           <View style={{ flex: 1 }}><Input value={langInput} onChangeText={setLangInput} placeholder="Add a language" testID="edit-lang-input" onSubmitEditing={addLang} /></View>
           <Pressable onPress={addLang} style={styles.addBtn} testID="edit-lang-add"><Feather name="plus" size={20} color="#fff" /></Pressable>
         </View>
+
+        <Text style={styles.section}>Weekly availability</Text>
+        <Text style={styles.hintText}>Parents will only see these hours when booking. Leave a day off entirely if you&apos;re not available.</Text>
+        <AvailabilityGrid value={availability} onChange={setAvailability} testID="edit-availability" />
 
         <Text style={styles.section}>Accreditations</Text>
         <Text style={styles.hintText}>One photo + one document (PDF, DOC, TXT).</Text>

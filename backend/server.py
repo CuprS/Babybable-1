@@ -21,6 +21,7 @@ import io
 import math
 import time
 import threading
+from collections import defaultdict, deque
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -147,13 +148,122 @@ def haversine_miles(a_lat: float, a_lng: float, b_lat: float, b_lng: float) -> f
     return 2 * R * math.asin(math.sqrt(h))
 
 
+# ---- Rate limiter (in-memory, per-IP) ----
+_rate_lock = threading.Lock()
+_rate_buckets: dict = defaultdict(deque)
+
+
+def _client_ip(request: Request) -> str:
+    fwd = request.headers.get("x-forwarded-for") or request.headers.get("x-real-ip") or ""
+    if fwd:
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def rate_limit(bucket: str, max_hits: int, per_seconds: int, request: Request) -> None:
+    """Simple sliding-window rate limit keyed by bucket + IP."""
+    key = f"{bucket}:{_client_ip(request)}"
+    now = time.time()
+    with _rate_lock:
+        dq = _rate_buckets[key]
+        while dq and now - dq[0] > per_seconds:
+            dq.popleft()
+        if len(dq) >= max_hits:
+            retry = int(per_seconds - (now - dq[0])) + 1
+            raise HTTPException(
+                status_code=429,
+                detail="Too many attempts. Please wait a moment and try again.",
+                headers={"Retry-After": str(max(1, retry))},
+            )
+        dq.append(now)
+
+
+# ---- Slot / weekday helpers ----
+WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+
+def weekday_key(date_str: str) -> Optional[str]:
+    try:
+        y, m, d = date_str.split("-")
+        # Python: Monday = 0
+        idx = datetime(int(y), int(m), int(d)).weekday()
+        return WEEKDAYS[idx]
+    except Exception:
+        return None
+
+
+def _normalize_slot(t: str) -> str:
+    """'9:00' -> '09:00'. Returns '' on garbage input."""
+    try:
+        h, mm = t.split(":")
+        return f"{int(h):02d}:{int(mm):02d}"
+    except Exception:
+        return ""
+
+
+def is_slot_allowed(tutor: dict, date: str, time_str: str) -> bool:
+    """True if the tutor's weekly_availability allows the slot (or is unset — legacy tutors)."""
+    wa = tutor.get("weekly_availability") or {}
+    if not wa:
+        return True  # legacy tutors haven't set a calendar yet
+    wk = weekday_key(date)
+    if not wk:
+        return True
+    slots = wa.get(wk) or []
+    if not slots:
+        return False
+    return _normalize_slot(time_str) in {_normalize_slot(s) for s in slots}
+
+
+async def is_slot_booked(tutor_id: str, date: str, time_str: str, exclude_booking_id: Optional[str] = None) -> bool:
+    q: dict = {
+        "tutor_id": tutor_id,
+        "date": date,
+        "time": _normalize_slot(time_str),
+        "payment_status": {"$ne": "canceled"},
+    }
+    if exclude_booking_id:
+        q["id"] = {"$ne": exclude_booking_id}
+    return bool(await db.bookings.find_one(q, {"_id": 0, "id": 1}))
+
+
+# ---- Platform fee ----
+PLATFORM_FEE_BPS = 100  # 1.00% of the base amount, in basis points
+
+
+def platform_fee_for(base_cents: int) -> int:
+    if base_cents <= 0:
+        return 0
+    return max(1, round(base_cents * PLATFORM_FEE_BPS / 10000))
+
+
+async def credit_platform_fee(booking: dict) -> None:
+    """Idempotently record the platform fee earning for a paid booking."""
+    fee = int(booking.get("platform_fee_cents") or 0)
+    if fee <= 0:
+        return
+    if await db.platform_earnings.find_one({"booking_id": booking["id"]}, {"_id": 0, "id": 1}):
+        return  # already credited
+    admin = await db.users.find_one({"is_admin": True}, {"_id": 0, "id": 1})
+    await db.platform_earnings.insert_one({
+        "id": str(uuid.uuid4()),
+        "booking_id": booking["id"],
+        "admin_user_id": (admin or {}).get("id"),
+        "parent_id": booking.get("parent_id"),
+        "tutor_id": booking.get("tutor_id"),
+        "amount_cents": fee,
+        "currency": booking.get("currency", "usd"),
+        "at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 # ---- Models ----
 Role = Literal["parent", "tutor", "admin"]
 
 
 class SignupRequest(BaseModel):
     email: EmailStr
-    password: str = Field(min_length=6, max_length=72)
+    password: str = Field(min_length=8, max_length=72)
     name: str = Field(min_length=1, max_length=80)
     role: Role
 
@@ -206,6 +316,10 @@ class TutorProfile(BaseModel):
     accreditation_document_url: Optional[str] = None
     hero_image_url: Optional[str] = None
     is_new: bool = False
+    # Weekly recurring availability. Keys: mon/tue/wed/thu/fri/sat/sun.
+    # Values: sorted list of "HH:MM" slot starts the tutor is available.
+    # Empty dict or empty list = "no restrictions set" (all slots open for backward compat).
+    weekly_availability: dict = Field(default_factory=dict)
 
 
 class TutorProfileUpdate(BaseModel):
@@ -219,6 +333,7 @@ class TutorProfileUpdate(BaseModel):
     accreditation_photo_url: Optional[str] = None
     accreditation_document_url: Optional[str] = None
     allows_remote: Optional[bool] = None
+    weekly_availability: Optional[dict] = None
 
 
 class BookingCreate(BaseModel):
@@ -243,6 +358,7 @@ class Booking(BaseModel):
     duration_minutes: int
     language: str
     amount_cents: int
+    platform_fee_cents: int = 0
     currency: str
     payment_status: str
     stripe_payment_intent_id: Optional[str] = None
@@ -383,11 +499,13 @@ async def require_admin(u: dict = Depends(current_user)) -> dict:
 
 # ---- Auth routes ----
 @api.post("/auth/signup", response_model=AuthResponse, status_code=201)
-async def signup(body: SignupRequest):
+async def signup(body: SignupRequest, request: Request):
+    rate_limit("signup", max_hits=5, per_seconds=600, request=request)
     email = body.email.lower().strip()
     existing = await db.users.find_one({"email": email})
     if existing:
-        raise HTTPException(409, "Email already registered")
+        # Generic error prevents easy email enumeration via signup.
+        raise HTTPException(400, "We couldn't create that account. Try logging in or use a different email.")
     uid = str(uuid.uuid4())
     doc = {
         "id": uid,
@@ -407,13 +525,15 @@ async def signup(body: SignupRequest):
             "bio": "", "languages": [], "hourly_rate_cents": 3000, "currency": "usd",
             "location": "", "experience_years": 0, "rating": 0.0, "reviews_count": 0,
             "accreditation_urls": [], "hero_image_url": None,
+            "weekly_availability": {},
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
     return AuthResponse(access_token=make_token(uid, body.role), user=user_to_public(doc))
 
 
 @api.post("/auth/login", response_model=AuthResponse)
-async def login(body: LoginRequest):
+async def login(body: LoginRequest, request: Request):
+    rate_limit("login", max_hits=8, per_seconds=300, request=request)
     email = body.email.lower().strip()
     u = await db.users.find_one({"email": email})
     if not u or not verify_password(body.password, u["password_hash"]):
@@ -507,6 +627,8 @@ def tutor_doc_to_model(t: dict) -> TutorProfile:
     # Defensive: coerce None -> defaults for fields that don't allow None
     if data.get("allows_remote") is None:
         data["allows_remote"] = False
+    if data.get("weekly_availability") is None:
+        data["weekly_availability"] = {}
     for k in ("bio", "currency"):
         if data.get(k) is None:
             data[k] = "" if k != "currency" else "usd"
@@ -626,12 +748,35 @@ async def update_my_tutor_profile(patch: TutorProfileUpdate, u: dict = Depends(c
             update["location"] = geocoded[0]["name"]
             update["latitude"] = geocoded[0]["latitude"]
             update["longitude"] = geocoded[0]["longitude"]
+    # Normalize weekly_availability: whitelist keys + normalize slots.
+    if "weekly_availability" in update:
+        wa_raw = update["weekly_availability"] or {}
+        wa: dict = {}
+        for day in WEEKDAYS:
+            slots = wa_raw.get(day) if isinstance(wa_raw, dict) else None
+            if isinstance(slots, list):
+                clean = sorted({_normalize_slot(s) for s in slots if _normalize_slot(s)})
+                if clean:
+                    wa[day] = clean
+        update["weekly_availability"] = wa
     if update:
         await db.tutors.update_one({"user_id": u["id"]}, {"$set": update})
         if "avatar_url" in update:
             await db.users.update_one({"id": u["id"]}, {"$set": {"avatar_url": update["avatar_url"]}})
     d = await db.tutors.find_one({"user_id": u["id"]}, {"_id": 0})
     return tutor_doc_to_model(d)
+
+
+@api.get("/tutors/{tutor_id}/booked-slots")
+async def tutor_booked_slots(tutor_id: str, start: Optional[str] = None, end: Optional[str] = None):
+    """Return the tutor's non-canceled booked slots as [{date, time}]."""
+    q: dict = {"tutor_id": tutor_id, "payment_status": {"$ne": "canceled"}}
+    if start:
+        q["date"] = {"$gte": start}
+    if end:
+        q.setdefault("date", {})["$lte"] = end
+    rows = await db.bookings.find(q, {"_id": 0, "date": 1, "time": 1}).to_list(1000)
+    return [{"date": r["date"], "time": _normalize_slot(r["time"])} for r in rows]
 
 
 # ---- Bookings ----
@@ -676,8 +821,17 @@ async def create_booking(body: BookingCreate, u: dict = Depends(current_user)):
                     f"This tutor is {distance} miles away — over the 100-mile limit for in-person lessons. Book them for remote lessons or an au-pair stay instead.",
                 )
     lessons = max(1, body.lessons_count)
-    amount = ((t["hourly_rate_cents"] * body.duration_minutes + 59) // 60) * lessons
+    base_amount = ((t["hourly_rate_cents"] * body.duration_minutes + 59) // 60) * lessons
+    fee = platform_fee_for(base_amount)
+    amount = base_amount + fee  # what the parent actually pays
     currency = t.get("currency", "usd")
+    # Slot availability check: don't allow booking outside tutor's weekly availability
+    # or over an existing booking. Skipped for au-pair (long-form stays).
+    if not au_pair:
+        if not is_slot_allowed(t, body.date, body.time):
+            raise HTTPException(400, "This tutor isn't available at that time. Pick another slot.")
+        if await is_slot_booked(t["id"], body.date, body.time):
+            raise HTTPException(409, "That slot was just booked by someone else. Please pick another time.")
     booking_id = str(uuid.uuid4())
     booking = {
         "id": booking_id,
@@ -690,6 +844,7 @@ async def create_booking(body: BookingCreate, u: dict = Depends(current_user)):
         "duration_minutes": body.duration_minutes,
         "language": body.language,
         "amount_cents": amount,
+        "platform_fee_cents": fee,
         "currency": currency,
         "payment_status": "pending",
         "stripe_payment_intent_id": None,
@@ -732,6 +887,7 @@ async def confirm_mock(booking_id: str, u: dict = Depends(current_user)):
         raise HTTPException(403, "Not your booking")
     await db.bookings.update_one({"id": booking_id}, {"$set": {"payment_status": "paid"}})
     b["payment_status"] = "paid"
+    await credit_platform_fee(b)
     await push_notification(b["tutor_id"], "booking", "New booking confirmed", f"{b['parent_name']} booked {b['date']} at {b['time']}")
     await push_notification(b["parent_id"], "booking", "Booking confirmed", f"You're set with {b['tutor_name']} on {b['date']}")
     return Booking(**b)
@@ -779,6 +935,10 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None, 
             {"stripe_payment_intent_id": intent_id},
             {"$set": {"payment_status": new_status}},
         )
+        if new_status == "paid":
+            paid = await db.bookings.find_one({"stripe_payment_intent_id": intent_id}, {"_id": 0})
+            if paid:
+                await credit_platform_fee(paid)
     return {"received": True}
 
 
@@ -808,6 +968,13 @@ async def send_invitation(body: InvitationCreate, u: dict = Depends(current_user
         raise HTTPException(403, "Only tutors can send lesson invitations")
     if not (await db.users.find_one({"id": body.to_user_id})):
         raise HTTPException(404, "Recipient not found")
+    # Validate that the tutor isn't inviting outside their own calendar / on top of a booking.
+    my_tutor = await db.tutors.find_one({"user_id": u["id"]}, {"_id": 0})
+    if my_tutor:
+        if not is_slot_allowed(my_tutor, body.date, body.time):
+            raise HTTPException(400, "That slot is outside your weekly availability. Update it in your profile or pick another time.")
+        if await is_slot_booked(my_tutor["id"], body.date, body.time):
+            raise HTTPException(409, "You already have a booking at that time.")
     mid = str(uuid.uuid4())
     inv = {
         "price_cents": body.price_cents, "date": body.date, "time": body.time,
@@ -843,7 +1010,13 @@ async def accept_invitation(message_id: str, u: dict = Depends(current_user)):
     t = await db.tutors.find_one({"user_id": msg["from_user_id"]}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tutor profile not found")
+    # Guard against double-booking during the pending window.
+    if await is_slot_booked(t["id"], inv["date"], inv["time"]):
+        raise HTTPException(409, "That slot is no longer available.")
     booking_id = str(uuid.uuid4())
+    inv_base = int(inv["price_cents"])
+    inv_fee = platform_fee_for(inv_base)
+    inv_total = inv_base + inv_fee
     booking = {
         "id": booking_id,
         "parent_id": u["id"],
@@ -854,7 +1027,8 @@ async def accept_invitation(message_id: str, u: dict = Depends(current_user)):
         "time": inv["time"],
         "duration_minutes": inv["duration_minutes"],
         "language": inv["language"],
-        "amount_cents": inv["price_cents"],
+        "amount_cents": inv_total,
+        "platform_fee_cents": inv_fee,
         "currency": t.get("currency", "usd"),
         "payment_status": "pending",
         "stripe_payment_intent_id": None,
@@ -870,7 +1044,7 @@ async def accept_invitation(message_id: str, u: dict = Depends(current_user)):
     try:
         intent = await run_in_threadpool(
             lambda: stripe.PaymentIntent.create(
-                amount=inv["price_cents"], currency=booking["currency"],
+                amount=inv_total, currency=booking["currency"],
                 automatic_payment_methods={"enabled": True},
                 metadata={"booking_id": booking_id, "invitation_message_id": message_id},
                 idempotency_key=f"invitation-{booking_id}",
@@ -1123,6 +1297,11 @@ async def my_notifications(u: dict = Depends(current_user)):
 # ---- Admin analytics ----
 @api.get("/admin/stats")
 async def admin_stats(u: dict = Depends(require_admin)):
+    total_fee_cents = 0
+    async for row in db.platform_earnings.aggregate([
+        {"$group": {"_id": None, "total": {"$sum": "$amount_cents"}}}
+    ]):
+        total_fee_cents = int(row.get("total") or 0)
     return {
         "users": await db.users.count_documents({}),
         "parents": await db.users.count_documents({"role": "parent"}),
@@ -1133,7 +1312,20 @@ async def admin_stats(u: dict = Depends(require_admin)):
         "reviews": await db.reviews.count_documents({}),
         "favorites": await db.favorites.count_documents({}),
         "events": await db.events.count_documents({}),
+        "platform_earnings_cents": total_fee_cents,
+        "platform_earnings_count": await db.platform_earnings.count_documents({}),
     }
+
+
+@api.get("/admin/earnings")
+async def admin_earnings(u: dict = Depends(require_admin), limit: int = 50):
+    docs = await db.platform_earnings.find({}, {"_id": 0}).sort("at", -1).to_list(limit)
+    total_cents = 0
+    async for row in db.platform_earnings.aggregate([
+        {"$group": {"_id": None, "total": {"$sum": "$amount_cents"}}}
+    ]):
+        total_cents = int(row.get("total") or 0)
+    return {"total_cents": total_cents, "count": await db.platform_earnings.count_documents({}), "entries": docs}
 
 
 @api.get("/admin/events")

@@ -60,8 +60,14 @@ export default function Payment() {
 
           <View style={styles.lineRow}>
             <Text style={styles.lineLabel}>Session</Text>
-            <Text style={styles.lineValue}>${(b.amount_cents / 100).toFixed(2)}</Text>
+            <Text style={styles.lineValue}>${(((b.amount_cents || 0) - (b.platform_fee_cents || 0)) / 100).toFixed(2)}</Text>
           </View>
+          {b.platform_fee_cents ? (
+            <View style={styles.lineRow}>
+              <Text style={styles.lineLabel}>Platform fee (1%)</Text>
+              <Text style={styles.lineValue}>${(b.platform_fee_cents / 100).toFixed(2)}</Text>
+            </View>
+          ) : null}
           <View style={[styles.lineRow, { marginTop: theme.space.md }]}>
             <Text style={styles.totalLabel}>Total</Text>
             <Text style={styles.totalValue}>${(b.amount_cents / 100).toFixed(2)}</Text>

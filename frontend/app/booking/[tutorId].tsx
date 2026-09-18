@@ -7,6 +7,7 @@ import { apiFetch, Tutor, Booking } from "@/src/api";
 import { theme } from "@/src/theme";
 import { Chip, Button } from "@/src/ui";
 import { track } from "@/src/analytics";
+import { slotStatus, HOUR_SLOTS, WeeklyAvailability } from "@/src/availability";
 
 const DURATIONS = [
   { label: "60 min", value: 60 },
@@ -14,7 +15,7 @@ const DURATIONS = [
   { label: "2 hrs", value: 120 },
   { label: "3 hrs", value: 180 },
 ];
-const TIMES = ["09:00", "10:30", "13:00", "15:00", "17:00", "18:30"];
+const TIMES = HOUR_SLOTS;
 
 function nextDays(n: number) {
   const days: { key: string; date: string; day: number; month: string; weekday: string }[] = [];
@@ -44,6 +45,7 @@ export default function BookingScreen() {
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState("");
+  const [bookedSlots, setBookedSlots] = useState<{ date: string; time: string }[]>([]);
 
   const days = useMemo(() => nextDays(14), []);
 
@@ -55,12 +57,28 @@ export default function BookingScreen() {
       setDate(days[0].date);
       setTime(TIMES[0]);
     }).finally(() => setLoading(false));
+    apiFetch<{ date: string; time: string }[]>(`/tutors/${tutorId}/booked-slots`)
+      .then(setBookedSlots)
+      .catch(() => {});
   }, [tutorId, days]);
+
+  // When date changes, if the currently picked time is no longer bookable, jump to first open slot.
+  useEffect(() => {
+    if (!tutor || !date || isAuPair) return;
+    const weekly = (tutor.weekly_availability as WeeklyAvailability) || {};
+    if (slotStatus(weekly, bookedSlots, date, time) !== "ok") {
+      const first = TIMES.find((t) => slotStatus(weekly, bookedSlots, date, t) === "ok");
+      if (first) setTime(first);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, tutor, bookedSlots, isAuPair]);
 
   if (loading || !tutor) return <View style={styles.center}><ActivityIndicator color={theme.color.brand} /></View>;
 
   const effectiveLessons = isAuPair ? Math.max(30, lessons) : lessons;
-  const totalCents = Math.ceil((tutor.hourly_rate_cents * duration) / 60) * effectiveLessons;
+  const baseCents = Math.ceil((tutor.hourly_rate_cents * duration) / 60) * effectiveLessons;
+  const feeCents = Math.max(1, Math.round(baseCents * 0.01));
+  const totalCents = baseCents + feeCents;
 
   const confirmBooking = async () => {
     setBooking(true); setError("");
@@ -118,9 +136,32 @@ export default function BookingScreen() {
 
         <Text style={styles.section}>Time</Text>
         <View style={{ flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap" }}>
-          {TIMES.map((t) => (
-            <Chip key={t} label={t} selected={time === t} onPress={() => setTime(t)} testID={`booking-time-${t}`} />
-          ))}
+          {TIMES.map((t) => {
+            const weekly = (tutor?.weekly_availability as WeeklyAvailability) || {};
+            const status = isAuPair ? "ok" : slotStatus(weekly, bookedSlots, date, t);
+            const disabled = status !== "ok";
+            const selected = time === t;
+            return (
+              <Pressable
+                key={t}
+                testID={`booking-time-${t}`}
+                onPress={() => !disabled && setTime(t)}
+                disabled={disabled}
+                style={[
+                  slotChipStyles.chip,
+                  selected && !disabled && slotChipStyles.chipOn,
+                  disabled && slotChipStyles.chipDisabled,
+                ]}
+              >
+                <Text style={[
+                  slotChipStyles.text,
+                  selected && !disabled && slotChipStyles.textOn,
+                  disabled && slotChipStyles.textDisabled,
+                ]}>{t}</Text>
+                {status === "booked" && <Text style={slotChipStyles.tag}>Booked</Text>}
+              </Pressable>
+            );
+          })}
         </View>
 
         <Text style={styles.section}>Duration</Text>
@@ -188,7 +229,8 @@ export default function BookingScreen() {
 
         <View style={styles.summary}>
           <Text style={styles.summaryTitle}>Summary</Text>
-          <Row label={`$${(tutor.hourly_rate_cents / 100).toFixed(0)}/hr × ${duration} min${effectiveLessons > 1 ? ` × ${effectiveLessons} lessons` : ""}`} value={`$${(totalCents / 100).toFixed(2)}`} />
+          <Row label={`$${(tutor.hourly_rate_cents / 100).toFixed(0)}/hr × ${duration} min${effectiveLessons > 1 ? ` × ${effectiveLessons} lessons` : ""}`} value={`$${(baseCents / 100).toFixed(2)}`} />
+          <Row label="Platform fee (1%)" value={`$${(feeCents / 100).toFixed(2)}`} />
           <View style={{ height: 1, backgroundColor: theme.color.border, marginVertical: theme.space.md }} />
           <Row label="Total" value={`$${(totalCents / 100).toFixed(2)}`} bold />
         </View>
@@ -243,4 +285,18 @@ const styles = StyleSheet.create({
   stepValue: { fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, minWidth: 32, textAlign: "center" },
   hint: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, marginTop: theme.space.sm, padding: theme.space.md, backgroundColor: theme.color.brandSoft, borderRadius: theme.radius.md },
   hintText: { color: theme.color.brandDark, fontSize: theme.font.sm, flex: 1 },
+});
+
+const slotChipStyles = StyleSheet.create({
+  chip: {
+    minWidth: 66, paddingHorizontal: theme.space.md, paddingVertical: 6,
+    borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.color.borderStrong,
+    backgroundColor: "transparent", alignItems: "center", justifyContent: "center",
+  },
+  chipOn: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
+  chipDisabled: { backgroundColor: theme.color.surfaceSecondary, borderColor: theme.color.border, opacity: 0.6 },
+  text: { color: theme.color.onSurface, fontWeight: "600", fontSize: theme.font.base },
+  textOn: { color: theme.color.onBrand },
+  textDisabled: { color: theme.color.muted, textDecorationLine: "line-through" },
+  tag: { color: theme.color.muted, fontSize: 10, marginTop: 1 },
 });

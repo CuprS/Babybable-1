@@ -90,6 +90,7 @@ export interface Tutor {
   accreditation_document_url?: string | null;
   hero_image_url?: string | null;
   is_new?: boolean;
+  weekly_availability?: { [day: string]: string[] };
 }
 
 export interface Booking {
@@ -103,6 +104,7 @@ export interface Booking {
   duration_minutes: number;
   language: string;
   amount_cents: number;
+  platform_fee_cents?: number;
   currency: string;
   payment_status: string;
   notes?: string;

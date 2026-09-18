@@ -66,6 +66,18 @@ export default function BookingDetail() {
 
         <Text style={styles.section}>Total</Text>
         <View style={styles.totalCard}>
+          {b.platform_fee_cents ? (
+            <View style={{ alignSelf: "stretch", marginBottom: theme.space.sm, gap: 2 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: theme.color.onSurfaceSecondary }}>Subtotal</Text>
+                <Text style={{ color: theme.color.onSurfaceSecondary }}>${((b.amount_cents - b.platform_fee_cents) / 100).toFixed(2)}</Text>
+              </View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ color: theme.color.onSurfaceSecondary }}>Platform fee (1%)</Text>
+                <Text style={{ color: theme.color.onSurfaceSecondary }}>${(b.platform_fee_cents / 100).toFixed(2)}</Text>
+              </View>
+            </View>
+          ) : null}
           <Text style={styles.total}>${(b.amount_cents / 100).toFixed(2)}</Text>
           <Text style={styles.totalNote}>Includes childcare + language</Text>
         </View>

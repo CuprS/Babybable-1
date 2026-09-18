@@ -9,6 +9,7 @@ import { theme } from "@/src/theme";
 import { track } from "@/src/analytics";
 import { useToast } from "@/src/toast";
 import { Chip, Button, Input } from "@/src/ui";
+import { slotStatus, HOUR_SLOTS, WeeklyAvailability } from "@/src/availability";
 
 interface Invitation {
   price_cents: number; date: string; time: string; duration_minutes: number;
@@ -20,7 +21,7 @@ interface Msg {
 }
 
 const DURATIONS = [{ label: "60 min", value: 60 }, { label: "90 min", value: 90 }, { label: "2 hrs", value: 120 }, { label: "3 hrs", value: 180 }];
-const TIMES = ["09:00", "10:30", "13:00", "15:00", "17:00", "18:30"];
+const TIMES = HOUR_SLOTS;
 function nextDays(n: number) {
   const out: { key: string; label: string }[] = [];
   const now = new Date();
@@ -205,7 +206,31 @@ function InvitationComposer({ open, onClose, onSent, toUserId }: { open: boolean
   const [language, setLanguage] = useState("English");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
+  const [weekly, setWeekly] = useState<WeeklyAvailability>({});
+  const [bookedSlots, setBookedSlots] = useState<{ date: string; time: string }[]>([]);
   const { show } = useToast();
+
+  // Load the tutor's own weekly availability + booked slots so we can grey out unavailable/booked cells.
+  useEffect(() => {
+    if (!open) return;
+    apiFetch<{ weekly_availability?: WeeklyAvailability; id: string }>("/tutors/me/profile")
+      .then((prof) => {
+        setWeekly((prof.weekly_availability as WeeklyAvailability) || {});
+        return apiFetch<{ date: string; time: string }[]>(`/tutors/${prof.id}/booked-slots`);
+      })
+      .then((rows) => setBookedSlots(rows || []))
+      .catch(() => {});
+  }, [open]);
+
+  // If the currently selected slot becomes invalid, hop to the first available one.
+  useEffect(() => {
+    if (!open) return;
+    if (slotStatus(weekly, bookedSlots, date, time) === "ok") return;
+    const first = TIMES.find((t) => slotStatus(weekly, bookedSlots, date, t) === "ok");
+    if (first) setTime(first);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, weekly, bookedSlots, open]);
+
   const submit = async () => {
     setSending(true);
     try {
@@ -243,9 +268,31 @@ function InvitationComposer({ open, onClose, onSent, toUserId }: { open: boolean
             </ScrollView>
             <Text style={sheetStyles.label}>Time</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.sm }}>
-              {TIMES.map((t) => (
-                <Chip key={t} label={t} selected={time === t} onPress={() => setTime(t)} testID={`invitation-time-${t}`} />
-              ))}
+              {TIMES.map((t) => {
+                const status = slotStatus(weekly, bookedSlots, date, t);
+                const disabled = status !== "ok";
+                const selected = time === t;
+                return (
+                  <Pressable
+                    key={t}
+                    testID={`invitation-time-${t}`}
+                    onPress={() => !disabled && setTime(t)}
+                    disabled={disabled}
+                    style={[
+                      invSlotStyles.chip,
+                      selected && !disabled && invSlotStyles.chipOn,
+                      disabled && invSlotStyles.chipDisabled,
+                    ]}
+                  >
+                    <Text style={[
+                      invSlotStyles.text,
+                      selected && !disabled && invSlotStyles.textOn,
+                      disabled && invSlotStyles.textDisabled,
+                    ]}>{t}</Text>
+                    {status === "booked" && <Text style={invSlotStyles.tag}>Booked</Text>}
+                  </Pressable>
+                );
+              })}
             </View>
             <Text style={sheetStyles.label}>Duration</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: theme.space.sm }}>
@@ -261,6 +308,20 @@ function InvitationComposer({ open, onClose, onSent, toUserId }: { open: boolean
     </Modal>
   );
 }
+
+const invSlotStyles = StyleSheet.create({
+  chip: {
+    minWidth: 66, paddingHorizontal: theme.space.md, paddingVertical: 6,
+    borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.color.borderStrong,
+    backgroundColor: "transparent", alignItems: "center", justifyContent: "center",
+  },
+  chipOn: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
+  chipDisabled: { backgroundColor: theme.color.surfaceSecondary, borderColor: theme.color.border, opacity: 0.6 },
+  text: { color: theme.color.onSurface, fontWeight: "600", fontSize: theme.font.base },
+  textOn: { color: theme.color.onBrand },
+  textDisabled: { color: theme.color.muted, textDecorationLine: "line-through" },
+  tag: { color: theme.color.muted, fontSize: 10, marginTop: 1 },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.color.surface },

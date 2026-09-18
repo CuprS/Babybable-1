@@ -29,6 +29,10 @@
 - [x] Global side drawer with 6 marketing landing pages + Download-the-app (web) + Privacy Policy.
 - [x] Delete account (both roles) — cascades bookings, messages, uploads, reviews.
 - [x] Seeded 2 sample tutors (Sofía García · Marie Dubois).
+- [x] **Tutor weekly availability calendar** — tutors toggle hourly slots per weekday in Edit profile; booking flow and lesson-invitation composer automatically grey out unavailable or already-booked slots.
+- [x] **Auth hardening (P3)** — signup/login rate limited per IP, generic duplicate-email response prevents enumeration, minimum password length 8.
+- [x] **Interactive tutor map on Explore** — Leaflet + OpenStreetMap in a WebView (native) / iframe (web), tap any pin to open the tutor. No API key required.
+- [x] **1% platform fee** — every paid booking adds a 1% premium credited to a `platform_earnings` ledger; admin dashboard shows total earnings and recent fee entries.
 
 ## MOCKED / Deferred
 - Stripe PaymentSheet remains MOCKED — backend creates real PaymentIntent when a valid key is set, else falls back. Ready to swap in `@stripe/stripe-react-native` PaymentSheet on the first EAS dev build.

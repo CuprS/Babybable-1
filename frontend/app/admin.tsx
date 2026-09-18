@@ -12,9 +12,11 @@ interface Stats {
   users: number; parents: number; tutors: number;
   bookings: number; paid_bookings: number;
   messages: number; reviews: number; favorites: number; events: number;
+  platform_earnings_cents?: number; platform_earnings_count?: number;
 }
 interface EventRow { user_id: string; user_name?: string; role: string; name: string; props: any; at: string }
 interface EventBucket { name: string; count: number }
+interface Earning { id: string; booking_id: string; parent_id?: string; tutor_id?: string; amount_cents: number; at: string }
 
 export default function Admin() {
   const { user, signOut } = useAuth();
@@ -22,17 +24,19 @@ export default function Admin() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [counts, setCounts] = useState<EventBucket[]>([]);
+  const [earnings, setEarnings] = useState<Earning[]>([]);
   const [filter, setFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [s, e] = await Promise.all([
+      const [s, e, earn] = await Promise.all([
         apiFetch<Stats>("/admin/stats"),
         apiFetch<{ events: EventRow[]; counts: EventBucket[] }>(`/admin/events${filter ? `?name=${encodeURIComponent(filter)}` : ""}`),
+        apiFetch<{ total_cents: number; count: number; entries: Earning[] }>("/admin/earnings?limit=20").catch(() => ({ total_cents: 0, count: 0, entries: [] as Earning[] })),
       ]);
-      setStats(s); setEvents(e.events); setCounts(e.counts);
+      setStats(s); setEvents(e.events); setCounts(e.counts); setEarnings(earn.entries || []);
     } catch (err) {
       console.log("admin load err", err);
     } finally {
@@ -72,6 +76,15 @@ export default function Admin() {
           <Text style={styles.hello}>Welcome, {user.name}</Text>
           <Text style={styles.sub}>Live snapshot of Babybabel activity.</Text>
 
+          <View style={styles.earnHero} testID="admin-platform-earnings">
+            <View style={{ flex: 1 }}>
+              <Text style={styles.earnLabel}>Platform earnings (1% fee)</Text>
+              <Text style={styles.earnAmount}>${((stats?.platform_earnings_cents ?? 0) / 100).toFixed(2)}</Text>
+              <Text style={styles.earnSub}>Across {stats?.platform_earnings_count ?? 0} paid booking{(stats?.platform_earnings_count ?? 0) === 1 ? "" : "s"}</Text>
+            </View>
+            <Feather name="trending-up" size={38} color={theme.color.brand} />
+          </View>
+
           <Text style={styles.section}>Platform stats</Text>
           <View style={styles.statGrid}>
             <StatCard icon="users" label="Users" value={stats?.users ?? 0} />
@@ -84,6 +97,20 @@ export default function Admin() {
             <StatCard icon="bookmark" label="Favourites" value={stats?.favorites ?? 0} />
             <StatCard icon="activity" label="Events" value={stats?.events ?? 0} />
           </View>
+
+          <Text style={styles.section}>Recent platform fees</Text>
+          {earnings.length === 0 ? (
+            <Text style={styles.muted}>No fees collected yet. They&apos;ll appear here once a booking is paid.</Text>
+          ) : (
+            earnings.slice(0, 8).map((r) => (
+              <View key={r.id} style={styles.eventRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eventName}>+ ${(r.amount_cents / 100).toFixed(2)}</Text>
+                  <Text style={styles.eventMeta}>Booking {r.booking_id.slice(0, 8)} · {new Date(r.at).toLocaleString()}</Text>
+                </View>
+              </View>
+            ))
+          )}
 
           <Text style={styles.section}>Top events</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.space.sm, paddingRight: theme.space.xl }}>
@@ -166,4 +193,15 @@ const styles = StyleSheet.create({
   eventMeta: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, marginTop: 4 },
   eventProps: { color: theme.color.muted, fontSize: 11, marginTop: 4, fontFamily: "monospace" },
   muted: { color: theme.color.onSurfaceSecondary },
+  earnHero: {
+    marginTop: theme.space.xl,
+    flexDirection: "row", alignItems: "center", gap: theme.space.md,
+    padding: theme.space.lg,
+    backgroundColor: theme.color.brandSoft,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1, borderColor: theme.color.brand,
+  },
+  earnLabel: { color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.sm, letterSpacing: 0.4, textTransform: "uppercase" },
+  earnAmount: { color: theme.color.brandDark, fontWeight: "700", fontSize: 34, letterSpacing: -0.5, marginTop: 2 },
+  earnSub: { color: theme.color.brandDark, opacity: 0.85, fontSize: theme.font.sm, marginTop: 2 },
 });

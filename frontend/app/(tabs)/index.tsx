@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { View, Text, StyleSheet, FlatList, Pressable, ScrollView, ActivityIndicator, RefreshControl, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
@@ -12,7 +12,7 @@ import { Chip } from "@/src/ui";
 import { MenuButton } from "@/src/drawer";
 import { flagFor } from "@/src/flags";
 import { track } from "@/src/analytics";
-import { StaticMap, MapMarker } from "@/src/staticmap";
+import { LiveMap, LiveMapMarker } from "@/src/livemap";
 
 const LANGUAGES = ["All", "Spanish", "French", "Japanese", "Mandarin", "German", "Arabic", "English", "Italian"];
 
@@ -20,7 +20,7 @@ export default function Explore() {
   const { user } = useAuth();
   const router = useRouter();
   const [tutors, setTutors] = useState<Tutor[]>([]);
-  const [mapPins, setMapPins] = useState<MapMarker[]>([]);
+  const [mapPins, setMapPins] = useState<LiveMapMarker[]>([]);
   const [favs, setFavs] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -60,8 +60,14 @@ export default function Explore() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadFavs(); }, [loadFavs]);
   useEffect(() => {
-    apiFetch<{ latitude: number; longitude: number; name: string }[]>("/tutors/map")
-      .then((rows) => setMapPins(rows.map((r) => ({ latitude: r.latitude, longitude: r.longitude, label: r.name, color: "red" }))))
+    apiFetch<{ id: string; latitude: number; longitude: number; name: string; hourly_rate_cents?: number }[]>("/tutors/map")
+      .then((rows) => setMapPins(rows.map((r) => ({
+        id: r.id,
+        latitude: r.latitude,
+        longitude: r.longitude,
+        label: r.name,
+        price: r.hourly_rate_cents ? `$${Math.round(r.hourly_rate_cents / 100)}/hr` : undefined,
+      }))))
       .catch(() => {});
   }, []);
 
@@ -125,7 +131,15 @@ export default function Explore() {
               {mapPins.length > 0 && (
                 <View style={{ marginBottom: theme.space.lg }} testID="explore-map">
                   <Text style={{ fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface, marginBottom: theme.space.sm }}>Tutors near and far</Text>
-                  <StaticMap markers={mapPins} zoom={3} height={180} caption={`${mapPins.length} tutor${mapPins.length === 1 ? "" : "s"} on the map`} />
+                  <LiveMap
+                    markers={mapPins}
+                    height={220}
+                    onPinPress={(id) => { track("map_pin_tap", { tutor_id: id }); router.push(`/tutor/${id}`); }}
+                    testID="explore-live-map"
+                  />
+                  <Text style={{ color: theme.color.muted, fontSize: theme.font.sm, marginTop: 6 }}>
+                    {mapPins.length} tutor{mapPins.length === 1 ? "" : "s"} on the map — pinch to zoom, tap a pin to view.
+                  </Text>
                 </View>
               )}
               <Text style={{ color: theme.color.onSurfaceSecondary, fontWeight: "600", marginBottom: theme.space.sm }} testID="tutor-count">
