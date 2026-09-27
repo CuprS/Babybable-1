@@ -1,0 +1,43 @@
+{
+  "summary": "Fernet + MultiFernet TIN-encryption swap fully verified. New suite /app/backend/tests/test_babybabel_session8_fernet.py = 11/11 pass. Regressions: session-7 W-9 = 16/16, session-6 = 8/8, session-5 = 10/10, session-4 = 18/18 (63/63 total). Coverage: (1) GET /api/admin/w9-encryption-status as admin returns ephemeral_key=false and keys_configured=1 (env key picked up). (2) Sofía POST /api/w9 with tin='987-65-4321': DB row's tin_encrypted starts with 'gAAAAA', length>=60, contains no '987654321'; POST body and GET /api/w9/me both omit tin_encrypted (or return null); tin_masked ends with '4321'. (3) server.decrypt_tin(stored_token) returns '987654321' — round-trip works. (4) After POST, encryption-status shows records_total>=1, records_on_primary_key==records_total, records_needing_rotation==0; parent → 403; unauthenticated → 401. (5) Legacy fallback: base64.b64encode(b'555555555') is decrypted by server.decrypt_tin and flagged by server.is_legacy_tin_token; a fresh Fernet token round-trips and is NOT flagged legacy; inserting a legacy row and calling decrypt_tin returns the plain digits. (6) Migration idempotency: a freshly-encrypted Fernet token is byte-identical after running _migrate_w9_tins(); a legacy base64 row is rewritten to a gAAAAA… token that decrypts to the original plain TIN, and running the migration a second time leaves it byte-identical. (7) db.w9_forms unique index on tutor_user_id — second insert_one for same tutor raises pymongo.errors.DuplicateKeyError.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_babybabel_session8_fernet.py",
+    "/app/test_reports/pytest/session8_fernet.xml",
+    "/app/test_reports/pytest/session7.xml",
+    "/app/test_reports/pytest/session56.xml",
+    "/app/test_reports/pytest/session4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:268-282 — W9_ENCRYPTION_KEYS parsed from env, first key is primary, MultiFernet built over all. If env var is empty a warning-level ephemeral key is generated. This is the right shape for rotation. Consider FAIL-FAST (raise) instead of ephemeral key when APP_NAME/ENV looks like prod — an ephemeral key silently makes every stored TIN unrecoverable across restarts.",
+    "server.py:290-303 — decrypt_tin never raises: on unknown token it returns ''. Correct for the migration path but means any caller must treat '' as decrypt-failure. No caller currently distinguishes '' from a truly-empty TIN — non-blocking since we never store an empty TIN (POST validates 9 digits) but worth a code comment.",
+    "server.py:1846-1871 — _migrate_w9_tins iterates async with an unbounded cursor and one update per record. For MVP-scale (<10k tutors) fine. If tutor count balloons, consider bulk_write to batch updates.",
+    "server.py:1454-1474 — encryption-status uses find() over all w9_forms and per-doc Fernet decrypt. O(N) but only invoked ad-hoc by admin; acceptable. Nicely returns {keys_configured, ephemeral_key, records_total, records_on_primary_key, records_needing_rotation} — exactly what a rotation runbook needs.",
+    "server.py:1835 — db.w9_forms.create_index('tutor_user_id', unique=True) will fail on startup if duplicate docs exist for the same tutor_user_id. Session-7 upsert semantics prevent that, but if any prior deployment created dupes, startup would crash. Non-blocking on this DB; call it out for prod migration.",
+    "server.py:1339-1342 — w9_public strips 'tin_encrypted' AND '_id' before instantiation, so the Fernet token is never leaked in responses. Verified end-to-end.",
+    "server.py:281 — _fernets uses _raw_keys directly; keys are neither validated (Fernet raises ValueError on bad base64) nor logged (good — never log key material). Server refuses to start if the primary key is malformed, which matches JWT_SECRET's fail-fast pattern.",
+    "server.py — file is 1885 lines. Same recommendation as prior iteration: split into routers (auth/tutors/bookings/w9/admin). Non-blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_babybabel_session8_fernet.py (new — 11 tests for Fernet key config, DB write-path encryption, round-trip decrypt, encryption-status counts+authz, legacy base64 fallback, migration idempotency, unique index)"
+  ],
+  "success_rate": {
+    "backend": "100% — session-8 Fernet: 11/11, session-7 regression: 16/16, session-6: 8/8, session-5: 10/10, session-4: 18/18 (63/63 total)",
+    "frontend": "skipped per request (backend-only)"
+  },
+  "seed_data_creation": "session-8 suite creates NO seed users. It re-uses seeded Sofía/parent/admin, mutates Sofía's single w9_forms row (POST /api/w9 upsert semantics keep exactly one), and injects/removes short-lived legacy/Fernet rows under synthetic tutor_user_ids prefixed 'TEST_LEGACY_/TEST_MIGR_A_/TEST_MIGR_B_/TEST_UNIQ_' — every one is cleaned in try/finally. No cross-suite pollution.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run new Fernet suite with `cd /app/backend && python -m pytest tests/test_babybabel_session8_fernet.py -v -n0 --junitxml=/app/test_reports/pytest/session8_fernet.xml`. MUST use -n0: pytest.ini enables xdist with loadscope, and this suite reuses one seeded Sofía across classes plus rebinds server.client/server.db to a persistent event loop for the migration tests — parallel workers would step on each other's motor client. Ordering matters INSIDE the module: test 3 (decrypt round-trip) reads the row written by test 2, so class order is TestEnvKeys→TestWritePathFernet→TestRoundTripDecrypt→TestEncryptionStatusCounts→TestLegacyFallback→TestMigrationIdempotent→TestUniqueIndex. Between suites still `sudo supervisorctl restart backend && sleep 10` if you get 429 (session-4 c4 burns login rate bucket for parent@test.dev). Migration tests bypass FastAPI and drive `server._migrate_w9_tins()` directly via a persistent asyncio loop with a fresh AsyncIOMotorClient bound to it — this pattern is required because `asyncio.run()` closes the loop and orphans motor's client on the next call. All other server helper calls (encrypt_tin/decrypt_tin/is_legacy_tin_token) are pure and safe on any loop. No open bugs.",
+  "rca_of_issue": "No open bugs. One test-setup gotcha worth documenting: server.py creates `client = AsyncIOMotorClient(MONGO_URL)` at import, which lazily binds to whichever event loop first awaits it. Calling `asyncio.run(server._migrate_w9_tins())` closes its loop on return, so a second `asyncio.run` call blows up with 'Event loop is closed' inside motor's cursor. Fix in test harness: keep ONE `asyncio.new_event_loop()` for the module and, before each _migrate_w9_tins() call, rebind `server.client` and `server.db` to a fresh AsyncIOMotorClient(io_loop=that_loop), then `loop.run_until_complete`. This is a test-only workaround; production is single-loop under uvicorn so the issue doesn't exist there."
+}

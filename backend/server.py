@@ -22,6 +22,8 @@ import math
 import time
 import threading
 import base64
+import binascii
+from cryptography.fernet import Fernet, MultiFernet, InvalidToken
 from collections import defaultdict, deque
 
 ROOT_DIR = Path(__file__).parent
@@ -258,7 +260,63 @@ async def credit_platform_fee(booking: dict) -> None:
     })
 
 
+# ---- TIN encryption (Fernet + MultiFernet key rotation) ----
+# Reads a comma-separated list of Fernet keys from env W9_ENCRYPTION_KEYS.
+# First key is used to encrypt new TINs; all keys are tried for decryption,
+# enabling zero-downtime rotation: add a new key at the front, keep the old
+# one at the back until every W-9 has been re-saved by its tutor.
+_W9_KEYS_ENV = os.getenv("W9_ENCRYPTION_KEYS", "").strip()
+if _W9_KEYS_ENV:
+    _raw_keys = [k.strip() for k in _W9_KEYS_ENV.split(",") if k.strip()]
+    _EPHEMERAL_W9_KEY = False
+else:
+    _generated = Fernet.generate_key().decode()
+    _raw_keys = [_generated]
+    _EPHEMERAL_W9_KEY = True
+    logger.warning(
+        "W9_ENCRYPTION_KEYS is not set — generated a one-off in-memory key. "
+        "Set W9_ENCRYPTION_KEYS in backend/.env before real tutors submit W-9 forms."
+    )
+
+_fernets = [Fernet(k.encode() if isinstance(k, str) else k) for k in _raw_keys]
+_tin_cipher = MultiFernet(_fernets)
+
+
+def encrypt_tin(tin_digits: str) -> str:
+    """Encrypt a TIN using the primary key."""
+    return _tin_cipher.encrypt(tin_digits.encode()).decode()
+
+
+def decrypt_tin(token: str) -> str:
+    """Decrypt a TIN token. Falls back to legacy base64 for one-time migration.
+
+    Returns "" if the token cannot be decoded (never raises)."""
+    if not token:
+        return ""
+    try:
+        return _tin_cipher.decrypt(token.encode()).decode()
+    except InvalidToken:
+        # Legacy: raw base64(tin) from the pre-Fernet scheme. Migrate on next write.
+        try:
+            return base64.b64decode(token.encode()).decode()
+        except (binascii.Error, UnicodeDecodeError, ValueError):
+            return ""
+
+
+def is_legacy_tin_token(token: str) -> bool:
+    """A modern Fernet token can be decrypted by the current cipher; anything else is legacy."""
+    if not token:
+        return False
+    try:
+        _tin_cipher.decrypt(token.encode())
+        return False
+    except InvalidToken:
+        return True
+# ---- End TIN encryption ----
+
+
 # ---- Models ----
+
 Role = Literal["parent", "tutor", "admin"]
 
 
@@ -1339,9 +1397,8 @@ async def submit_w9(body: W9FormIn, u: dict = Depends(current_user)):
         "country": (body.country or "US").strip(),
         "tin_type": body.tin_type,
         "tin_masked": _mask_tin(tin_digits),
-        # Store the raw TIN under an "encrypted" key. In a real prod system, use KMS + envelope encryption.
-        # Here we obfuscate with base64 so it's not casually readable. It is NEVER returned by any endpoint.
-        "tin_encrypted": base64.b64encode(tin_digits.encode()).decode(),
+        # Fernet-encrypted TIN. Rotates via W9_ENCRYPTION_KEYS. Never returned by the API.
+        "tin_encrypted": encrypt_tin(tin_digits),
         "signature_name": body.signature_name.strip(),
         "is_us_person": bool(body.is_us_person),
         "exempt_from_backup": bool(body.exempt_from_backup),
@@ -1392,6 +1449,29 @@ async def admin_get_w9(tutor_user_id: str, u: dict = Depends(require_admin)):
     if not doc:
         raise HTTPException(404, "W-9 not found for that tutor")
     return w9_public(doc)
+
+
+@api.get("/admin/w9-encryption-status")
+async def admin_w9_encryption_status(u: dict = Depends(require_admin)):
+    """Ops endpoint: shows key config + counts of records under old vs primary key.
+    Use during a rotation to know when it's safe to remove the retired key."""
+    total = await db.w9_forms.count_documents({})
+    primary = 0
+    legacy = 0
+    async for doc in db.w9_forms.find({}, {"_id": 0, "tin_encrypted": 1}):
+        token = (doc or {}).get("tin_encrypted") or ""
+        try:
+            _fernets[0].decrypt(token.encode())
+            primary += 1
+        except InvalidToken:
+            legacy += 1
+    return {
+        "keys_configured": len(_fernets),
+        "ephemeral_key": _EPHEMERAL_W9_KEY,
+        "records_total": total,
+        "records_on_primary_key": primary,
+        "records_needing_rotation": legacy,
+    }
 
 
 # ---- Parent profile ----
@@ -1752,6 +1832,7 @@ async def on_startup():
     await db.bookings.create_index("parent_id")
     await db.bookings.create_index("tutor_id")
     await db.messages.create_index([("from_user_id", 1), ("to_user_id", 1)])
+    await db.w9_forms.create_index("tutor_user_id", unique=True)
     try:
         if EMERGENT_KEY:
             await run_in_threadpool(_init_storage_sync)
@@ -1759,6 +1840,35 @@ async def on_startup():
     except Exception as e:
         logger.warning(f"Storage init deferred: {e}")
     await seed_data()
+    await _migrate_w9_tins()
+
+
+async def _migrate_w9_tins() -> None:
+    """One-shot: re-encrypt any W-9 TINs that were stored with the legacy base64 scheme
+    (or with an old Fernet key that's since rotated out). Idempotent — a Fernet-native
+    token under the current primary key is left alone."""
+    migrated = 0
+    failed = 0
+    cursor = db.w9_forms.find({"tin_encrypted": {"$ne": None}}, {"_id": 0, "tutor_user_id": 1, "tin_encrypted": 1})
+    async for doc in cursor:
+        token = doc.get("tin_encrypted") or ""
+        # Skip fresh Fernet tokens under the current primary key.
+        try:
+            _fernets[0].decrypt(token.encode())
+            continue
+        except InvalidToken:
+            pass
+        plain = decrypt_tin(token)
+        if not plain:
+            failed += 1
+            continue
+        await db.w9_forms.update_one(
+            {"tutor_user_id": doc["tutor_user_id"]},
+            {"$set": {"tin_encrypted": encrypt_tin(plain)}},
+        )
+        migrated += 1
+    if migrated or failed:
+        logger.info(f"W-9 TIN migration: re-encrypted {migrated} record(s), {failed} failed.")
 
 
 @api.get("/")
