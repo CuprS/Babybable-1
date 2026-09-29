@@ -19,6 +19,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
 import io
 import math
+import re
 import time
 import threading
 import base64
@@ -157,9 +158,18 @@ _rate_buckets: dict = defaultdict(deque)
 
 
 def _client_ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for") or request.headers.get("x-real-ip") or ""
-    if fwd:
-        return fwd.split(",")[0].strip()
+    """Return the caller's IP.
+    We're behind Kubernetes ingress which APPENDS the real client IP as the
+    right-most value in X-Forwarded-For (any left-side values are attacker-controlled).
+    Fall back to X-Real-IP, then the direct client host."""
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        parts = [p.strip() for p in xff.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
+    real = request.headers.get("x-real-ip")
+    if real:
+        return real.strip()
     return request.client.host if request.client else "unknown"
 
 
@@ -625,6 +635,9 @@ async def require_admin(u: dict = Depends(current_user)) -> dict:
 async def signup(body: SignupRequest, request: Request):
     rate_limit("signup", max_hits=5, per_seconds=600, request=request)
     email = body.email.lower().strip()
+    if body.role not in ("parent", "tutor"):
+        # Admin roles are provisioned server-side only; never accept via signup.
+        raise HTTPException(400, "Invalid role")
     existing = await db.users.find_one({"email": email})
     if existing:
         # Generic error prevents easy email enumeration via signup.
@@ -716,25 +729,54 @@ async def get_file(path: str, token: Optional[str] = None, u_maybe: Optional[str
     rec = await db.uploads.find_one({"path": path}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "File not found")
-    # Children photos are strictly private — served only to the owning parent (or admin) via a Bearer token.
+
+    # Classify the file's sensitivity by looking up who references it.
+    # - private: children photos (owner-only)
+    # - restricted: tutor accreditation docs/photos, W-9 references (any logged-in user)
+    # - public: everything else (avatars, hero images)
     child_ref = await db.parents.find_one({"children.avatar_url": path}, {"_id": 0, "user_id": 1})
-    if child_ref:
-        tok = u_maybe or token
-        if not tok:
-            raise HTTPException(401, "Auth required for private file")
+    accreditation_ref = None
+    if not child_ref:
+        accreditation_ref = await db.tutors.find_one(
+            {"$or": [
+                {"accreditation_photo_url": path},
+                {"accreditation_document_url": path},
+                {"accreditation_urls": path},
+            ]},
+            {"_id": 0, "user_id": 1},
+        )
+
+    tok = u_maybe or token
+    caller: Optional[dict] = None
+    if tok:
         try:
             payload = jwt.decode(tok, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+            caller = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0})
         except Exception:
-            raise HTTPException(401, "Invalid token")
-        caller = await db.users.find_one({"id": payload.get("sub")}, {"_id": 0})
-        if not caller or (caller["id"] != child_ref["user_id"] and not caller.get("is_admin")):
+            caller = None
+
+    is_private = bool(child_ref)
+    is_restricted = bool(accreditation_ref)
+
+    if is_private:
+        if not caller:
+            raise HTTPException(401, "Auth required for private file")
+        if caller["id"] != child_ref["user_id"] and not caller.get("is_admin"):
             raise HTTPException(403, "Not your file")
+    elif is_restricted:
+        # Any authenticated user (parent/tutor/admin) can view accreditation documents.
+        if not caller:
+            raise HTTPException(401, "Auth required to view accreditation documents")
+
     try:
         content, ctype = await run_in_threadpool(_get_object_sync, path)
     except Exception as e:
         logger.exception("download failed")
         raise HTTPException(502, f"Download failed: {e}")
-    return Response(content=content, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})
+
+    # SEC-003 remediation: never let a shared cache/CDN store gated files.
+    cache_header = "public, max-age=86400" if (not is_private and not is_restricted) else "private, no-store"
+    return Response(content=content, media_type=ctype, headers={"Cache-Control": cache_header})
 
 
 # ---- Tutors ----
@@ -805,11 +847,13 @@ async def list_tutors(
     if max_rate is not None:
         query.setdefault("hourly_rate_cents", {})["$lte"] = max_rate
     if q:
+        # Escape user input so a crafted regex can't pin DB CPU (ReDoS) or match unexpected fields.
+        needle = re.escape(q.strip())[:80]
         query["$or"] = [
-            {"name": {"$regex": q, "$options": "i"}},
-            {"bio": {"$regex": q, "$options": "i"}},
-            {"location": {"$regex": q, "$options": "i"}},
-            {"languages": {"$regex": q, "$options": "i"}},
+            {"name": {"$regex": needle, "$options": "i"}},
+            {"bio": {"$regex": needle, "$options": "i"}},
+            {"location": {"$regex": needle, "$options": "i"}},
+            {"languages": {"$regex": needle, "$options": "i"}},
         ]
     docs = await db.tutors.find(query, {"_id": 0}).to_list(200)
 
@@ -1050,7 +1094,13 @@ async def create_booking(body: BookingCreate, u: dict = Depends(current_user)):
 
 @api.post("/bookings/{booking_id}/confirm-mock", response_model=Booking)
 async def confirm_mock(booking_id: str, u: dict = Depends(current_user)):
-    """MOCKED payment confirmation — for MVP without native Stripe SDK in Expo Go."""
+    """MOCKED payment confirmation — for MVP dev/preview only.
+
+    Gated by env `ENABLE_MOCK_CONFIRM`. In production this MUST be `false` and
+    `payment_status` should only be flipped by the signed Stripe webhook. Both
+    settings live in `backend/.env`."""
+    if os.getenv("ENABLE_MOCK_CONFIRM", "true").lower() != "true":
+        raise HTTPException(410, "Mock payment confirmation is disabled in this environment.")
     b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if not b:
         raise HTTPException(404, "Booking not found")
@@ -1740,11 +1790,18 @@ async def delete_account(u: dict = Depends(current_user)):
     uid = u["id"]
     if u["role"] == "tutor":
         await db.tutors.delete_many({"user_id": uid})
+        await db.w9_forms.delete_many({"tutor_user_id": uid})
     else:
         await db.parents.delete_many({"user_id": uid})
     await db.bookings.delete_many({"$or": [{"parent_id": uid}, {"tutor_id": uid}]})
     await db.messages.delete_many({"$or": [{"from_user_id": uid}, {"to_user_id": uid}]})
     await db.reviews.delete_many({"parent_id": uid})
+    # Ancillary PII: purge everything else tied to this account.
+    await db.notifications.delete_many({"user_id": uid})
+    await db.events.delete_many({"user_id": uid})
+    await db.favorites.delete_many({"user_id": uid})
+    await db.uploads.delete_many({"owner_id": uid})
+    # Platform earnings intentionally preserved (accounting record); no PII lives on that doc.
     await db.users.delete_one({"id": uid})
     return {"deleted": True}
 
