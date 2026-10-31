@@ -29,6 +29,8 @@
 - [x] Global side drawer with 6 marketing landing pages + Download-the-app (web) + Privacy Policy.
 - [x] Delete account (both roles) — cascades bookings, messages, uploads, reviews.
 - [x] **Tutor contribution blog** — public `/blog` list + `/blog/[id]` (readable signed-out), tutor `/blog/compose` (title, topic, summary, body, up to 2 uploaded photos; first = cover) and `/blog/me` (In review / Published / Needs revisions + admin feedback, revise & resubmit). Admin "Blog submissions" panel in `/admin` (publish / reject with required note / unpublish). 4 editorial posts seeded. Backend in `backend/routes/blog.py`; W-9 routes moved to `backend/routes/w9.py`.
+- [x] **Security hardening (audit follow-up)** — CORS limited to the app's own origins (`CORS_ORIGINS` / `CORS_ORIGIN_REGEX` env override); file downloads accept the Authorization header only (no `?token=`); family profile visible only to owner, admin, and tutors with a booking or a chat the family took part in, never exact coordinates for non-owners; message limits 20/min and 300/day per sender (text + invitations), max 10 new-family cold conversations per tutor per day, message text 1–4000 chars.
+
 
 - [x] Seeded 2 sample tutors (Sofía García · Marie Dubois).
 - [x] **Tutor weekly availability calendar** — tutors toggle hourly slots per weekday in Edit profile; booking flow and lesson-invitation composer automatically grey out unavailable or already-booked slots.

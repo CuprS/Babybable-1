@@ -24,21 +24,43 @@ export default function ParentPublic() {
   const { user } = useAuth();
   const [parent, setParent] = useState<Parent | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    apiFetch<Parent>(`/parents/${id}/public`).then(setParent).catch(() => {}).finally(() => setLoading(false));
+    apiFetch<Parent>(`/parents/${id}/public`)
+      .then(setParent)
+      .catch((e) => setError(e?.message || "Family profile not found"))
+      .finally(() => setLoading(false));
   }, [id]);
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={theme.color.brand} /></View>;
-  if (!parent) return <View style={styles.center}><Text>Family profile not found</Text></View>;
+  if (!parent) {
+    return (
+      <SafeAreaView style={styles.root} edges={["top"]}>
+        <View style={styles.header}>
+          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="parent-public-back">
+            <Feather name="arrow-left" size={22} color={theme.color.onSurface} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Family profile</Text>
+          <View style={{ width: 22 }} />
+        </View>
+        <View style={styles.center} testID="parent-public-locked">
+          <Feather name="lock" size={28} color={theme.color.brand} />
+          <Text style={{ color: theme.color.onSurfaceSecondary, textAlign: "center", marginTop: theme.space.md, paddingHorizontal: theme.space.xl }}>
+            {error || "Family profile not found"}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const isOwner = user?.id === parent.user_id;
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} testID="parent-public-back">
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="parent-public-back">
           <Feather name="arrow-left" size={22} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>Family profile</Text>

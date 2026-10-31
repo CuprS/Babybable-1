@@ -1,0 +1,58 @@
+{
+  "summary": "Security hardening retest (family privacy, message spam caps, cold-message cap, no token in file URLs, CORS). BACKEND: new suite tests/test_babybabel_session10_privacy_spam.py 16/16 PASS (latest run). GET /api/parents/{id}/public: owner 200 with coords and child avatar; admin 200 with lat/lng removed; unrelated tutor 403 'only visible to their tutors'; tutor who only sent an unanswered cold message 403; after the parent replies 200 with lat/lng null, city 'Austin, TX', child names/ages, child avatar null; tutor with a booking 200; other parent 403 (even after they chatted); anonymous 401. Messages: 21st message in a minute -> 429 'very quickly' with Retry-After: 60; invitations count toward the minute cap; 300/day cap -> 429 'Daily limit of 300'. Cold cap: 10 new parents OK, 11th -> 429 'You can contact 10 new families per day', a cold invitation is also blocked, a follow-up to an already-contacted parent works, parent->tutor messages are never stored as cold, and once a family reaches out the tutor can reply. Sending 20 cold messages in parallel gave exactly 10x200 and 10x429. Files: ?token= returns 401/403, Authorization header returns 200. CORS: evil.com preflight gets no ACAO (400) and the app origin is allowed. REGRESSION: blog + bookings 23/23 after fixing a test-data clash in test_babybabel_bookings.py; W-9 session7 + session8_fernet 27/27. FRONTEND (375x667): unrelated tutor on /parent-profile/{id} sees parent-public-locked with the lock icon, server text and parent-public-back; related tutor sees profile with city and children, no map, privacy note; owner sees Preview badge + parent-map. Chat as a capped tutor: send shows toast 'Message not sent' with 'You can contact 10 new families per day...' and the input text comes back. No page errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "CORS middleware (server.py:61-74)", "issue": "The default allow_origin_regex lets in ANY *.emergentagent.com / emergent.host / emergent.sh subdomain and any http://localhost:*. A preflight from https://attacker-app.preview.emergentagent.com was allowed. Other people's apps on Emergent can be served from these domains, so this does not meet 'only our own app origins'. The risk is limited because auth uses bearer tokens only (allow_credentials=False)."},
+      {"endpoint": "Preview ingress (infra)", "issue": "Through the public URL, a simple GET with Origin: https://evil.com comes back with 'Access-Control-Allow-Origin: *' added by the Cloudflare/Google ingress. The backend itself (localhost:8001) sends no ACAO, so this is not an app bug. Check production ingress behaviour separately."},
+      {"endpoint": "POST /api/messages", "issue": "MessageCreate.text has no length limit: empty text '' -> 200 and 500KB text -> 200. This allows spam and storage bloat that the per-count caps do not cover."},
+      {"endpoint": "enforce_message_limits", "issue": "Count-then-insert is not atomic (TOCTOU). A parallel test with 20 cold messages did not get past the cap, but heavy concurrency could slightly exceed the caps in theory."},
+      {"endpoint": "messages collection indexes", "issue": "The only index is (from_user_id, to_user_id). The limit queries filter on from_user_id + created_at (+ cold) and the relationship check queries both directions. Add indexes (from_user_id, created_at) and (from_user_id, cold, created_at) so every send does not scan as messages grow."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "parent-profile locked screen back button", "issue": "When /parent-profile/{id} is opened by deep link with no history, router.back() does nothing (URL unchanged after tap). Use router.canGoBack() ? router.back() : router.replace('/').", "testID": "parent-public-back", "priority": "low"}
+    ],
+    "integration_issues": [
+      {"flow": "Private/restricted images", "issue": "fileUrl() builds bare /api/files/{path} URLs and expo-image sends no Authorization header. With ?token= removed, private files (child avatars in edit-parent and the owner preview in parent-profile) and restricted files (accreditation photos/doc link in tutor/[id]) will return 401 in the app. This was already the case (the frontend never appended ?token=) but there is now no fallback. Pass headers: {Authorization} in the Image source, or fetch as blob, or use short-lived signed URLs.", "affected_testIDs": ["public-child-0"]}
+    ],
+    "design_issues": [
+      {"screen": "parent-profile", "issues": ["Back icon is 22x24px; it relies on hitSlop=12 to reach about 46px, which is acceptable but borderline."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_babybabel_session10_privacy_spam.py",
+    "/app/backend/tests/seed_session10_ui.py",
+    "/app/backend/tests/race_cold_cap_check.py",
+    "/app/test_reports/pytest/pytest_session10.xml",
+    "/app/test_reports/pytest/pytest_regression_blog_bookings.xml",
+    "/app/test_reports/pytest/pytest_regression_w9.xml"
+  ],
+  "action_items": [
+    "Tighten the CORS default: drop the wildcard emergentagent.com/emergent.host/emergent.sh regex and localhost. Build an exact allow-list from env (the app's own preview origin + production domain via CORS_ORIGINS).",
+    "Add max_length (e.g. 4000) and min_length=1 (after strip) to MessageCreate.text.",
+    "Add Mongo indexes on messages: (from_user_id, created_at) and (from_user_id, cold, created_at).",
+    "Frontend: load private/restricted images with an Authorization header (expo-image source headers) or via signed short-lived URLs. Otherwise owner child photos and tutor accreditation images return 401.",
+    "parent-profile back button: fall back to router.replace('/') when !router.canGoBack()."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1827 lines; split messaging/privacy into a router module like blog/W-9.",
+    "The privacy check counts any booking (pending/failed/canceled) as a relationship. Acceptable because only parents create bookings, but document it.",
+    "Admin view strips lat/lng (non-owner branch). The spec says admin still sees the profile, so this is OK, but confirm admin does not need coordinates.",
+    "In send_invitation, limits are enforced before slot validation; rejected invitations are not inserted, so they correctly do not count."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_babybabel_session10_privacy_spam.py (new)",
+    "/app/backend/tests/seed_session10_ui.py (new)",
+    "/app/backend/tests/race_cold_cap_check.py (new)",
+    "/app/backend/tests/test_babybabel_bookings.py (TestBookingGetACL booking fixture: hardcoded 2026-06-01 10:00 slot replaced with a random future Monday 09:00/10:00 to match Sofia's availability and avoid 409 clashes across runs)"
+  ],
+  "success_rate": {"backend": "100% (16/16 new on the latest run + 50/50 regression after test fix)", "frontend": "100% of requested flows (locked screen, related-tutor view, owner preview + map, chat failure toast + text restore)"},
+  "flaky_tests": [{"test": "TestMessageRateLimits::test_invitations_count_toward_minute_cap", "failure_rate": "1/3 runs", "reason": "That run was very slow (77s); the 21 requests took over 60s, so the 1-minute window rolled over. Environment latency, not an app bug."}],
+  "seed_data_creation": "Test users are inserted straight into Mongo (TEST_ prefix) with JWTs minted from backend JWT_SECRET, to get around the 5 signups/10min per-IP limit. All are cleaned up by module teardown / scripts; 0 TEST_ users left.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run the session10 suite with -n 0. It mints tokens directly (no signup/login) so it does not hit the auth rate limits. Web auth token lives in localStorage key 'babybabel_token' (JSON-stringified); inject it to impersonate users in Playwright. Sofia's weekly availability is mon 09:00/10:00 and tue 07:30/20:00, so bookings need a matching weekday/time. Through the public URL the ingress adds ACAO:* on simple GETs; check app CORS at http://localhost:8001."
+}

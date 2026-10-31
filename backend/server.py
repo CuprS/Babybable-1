@@ -56,12 +56,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 app = FastAPI(title="Babybabel API")
 api = APIRouter(prefix="/api")
 
+# Browsers may only call the API from our own app origins. Native apps send no Origin
+# header, so CORS doesn't affect them. Override with CORS_ORIGINS (comma-separated) for a custom domain.
+_cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=False,  # bearer tokens only — no cookies
+    allow_origins=_cors_origins,
+    allow_origin_regex=os.environ.get(
+        "CORS_ORIGIN_REGEX",
+        r"^https://papyrus-tutors(-[a-z0-9-]+)?\.(preview\.emergentagent\.com|emergent\.host)$",
+    ),
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Stripe-Signature"],
 )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
@@ -446,7 +453,7 @@ class Booking(BaseModel):
 
 class MessageCreate(BaseModel):
     to_user_id: str
-    text: str
+    text: str = Field(min_length=1, max_length=4000)
 
 
 class Invitation(BaseModel):
@@ -676,7 +683,7 @@ async def upload(file: UploadFile = File(...), u: dict = Depends(current_user)):
 
 
 @api.get("/files/{path:path}")
-async def get_file(path: str, token: Optional[str] = None, u_maybe: Optional[str] = Depends(oauth2_scheme)):
+async def get_file(path: str, u_maybe: Optional[str] = Depends(oauth2_scheme)):
     rec = await db.uploads.find_one({"path": path}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "File not found")
@@ -697,7 +704,7 @@ async def get_file(path: str, token: Optional[str] = None, u_maybe: Optional[str
             {"_id": 0, "user_id": 1},
         )
 
-    tok = u_maybe or token
+    tok = u_maybe  # Authorization header only — never accept tokens in the URL
     caller: Optional[dict] = None
     if tok:
         try:
@@ -1115,10 +1122,48 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None, 
 
 
 # ---- Messages ----
+MSG_PER_MINUTE = 20
+MSG_PER_DAY = 300
+COLD_MSG_PER_DAY = 10
+
+
+async def enforce_message_limits(u: dict, to_user: dict) -> bool:
+    """Throttle chat spam. Returns True when this message opens a cold conversation
+    (tutor -> family with no prior chat or booking)."""
+    now = datetime.now(timezone.utc)
+    minute_ago = (now - timedelta(minutes=1)).isoformat()
+    day_ago = (now - timedelta(days=1)).isoformat()
+    if await db.messages.count_documents({"from_user_id": u["id"], "created_at": {"$gte": minute_ago}}) >= MSG_PER_MINUTE:
+        raise HTTPException(429, "You're sending messages very quickly. Please wait a minute.", headers={"Retry-After": "60"})
+    if await db.messages.count_documents({"from_user_id": u["id"], "created_at": {"$gte": day_ago}}) >= MSG_PER_DAY:
+        raise HTTPException(429, f"Daily limit of {MSG_PER_DAY} messages reached. Try again tomorrow.")
+    if u.get("role") != "tutor" or to_user.get("role") != "parent":
+        return False
+    if await users_have_relationship(u["id"], to_user["id"]):
+        return False
+    if await db.messages.count_documents({"from_user_id": u["id"], "cold": True, "created_at": {"$gte": day_ago}}) >= COLD_MSG_PER_DAY:
+        raise HTTPException(429, f"You can contact {COLD_MSG_PER_DAY} new families per day. Try again tomorrow.")
+    return True
+
+
+async def users_have_relationship(tutor_user_id: str, parent_user_id: str, parent_must_reach_out: bool = False) -> bool:
+    """True if the tutor and parent share a booking or a chat. With parent_must_reach_out,
+    only chats the family took part in count (a tutor's unanswered cold message doesn't)."""
+    tutor = await db.tutors.find_one({"user_id": tutor_user_id}, {"_id": 0, "id": 1})
+    if tutor and await db.bookings.find_one({"tutor_id": tutor["id"], "parent_id": parent_user_id}, {"_id": 1}):
+        return True
+    q = [{"from_user_id": parent_user_id, "to_user_id": tutor_user_id}]
+    if not parent_must_reach_out:
+        q.append({"from_user_id": tutor_user_id, "to_user_id": parent_user_id})
+    return bool(await db.messages.find_one({"$or": q}, {"_id": 1}))
+
+
 @api.post("/messages", response_model=Message)
 async def send_message(body: MessageCreate, u: dict = Depends(current_user)):
-    if not (await db.users.find_one({"id": body.to_user_id})):
+    to_user = await db.users.find_one({"id": body.to_user_id}, {"_id": 0, "id": 1, "role": 1})
+    if not to_user:
         raise HTTPException(404, "Recipient not found")
+    cold = await enforce_message_limits(u, to_user)
     mid = str(uuid.uuid4())
     m = {
         "id": mid,
@@ -1129,7 +1174,7 @@ async def send_message(body: MessageCreate, u: dict = Depends(current_user)):
         "invitation": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.messages.insert_one(m)
+    await db.messages.insert_one({**m, "cold": cold})
     await push_notification(body.to_user_id, "chat", f"New message from {u['name']}", body.text[:120])
     return Message(**m)
 
@@ -1138,8 +1183,10 @@ async def send_message(body: MessageCreate, u: dict = Depends(current_user)):
 async def send_invitation(body: InvitationCreate, u: dict = Depends(current_user)):
     if u["role"] != "tutor":
         raise HTTPException(403, "Only tutors can send lesson invitations")
-    if not (await db.users.find_one({"id": body.to_user_id})):
+    to_user = await db.users.find_one({"id": body.to_user_id}, {"_id": 0, "id": 1, "role": 1})
+    if not to_user:
         raise HTTPException(404, "Recipient not found")
+    cold = await enforce_message_limits(u, to_user)
     # Validate that the tutor isn't inviting outside their own calendar / on top of a booking.
     my_tutor = await db.tutors.find_one({"user_id": u["id"]}, {"_id": 0})
     if my_tutor:
@@ -1162,7 +1209,7 @@ async def send_invitation(body: InvitationCreate, u: dict = Depends(current_user
         "invitation": inv,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    await db.messages.insert_one(m)
+    await db.messages.insert_one({**m, "cold": cold})
     await push_notification(body.to_user_id, "invitation", f"Lesson invitation from {u['name']}", f"{body.language} · {body.date} at {body.time} · ${body.price_cents/100:.0f}")
     return Message(**m)
 
@@ -1415,9 +1462,13 @@ async def get_parent_public(user_id: str, u: dict = Depends(current_user)):
     if not fresh:
         raise HTTPException(404, "User not found")
     is_owner = u["id"] == user_id
+    if not is_owner and not u.get("is_admin"):
+        # Only tutors the family booked with or chatted with may view the profile.
+        if u.get("role") != "tutor" or not await users_have_relationship(u["id"], user_id, parent_must_reach_out=True):
+            raise HTTPException(403, "This family profile is only visible to their tutors")
     if not is_owner:
-        # Strip children avatars for non-owners.
-        parent = dict(parent)
+        # Strip children avatars and the exact home location — city only.
+        parent = {**parent, "latitude": None, "longitude": None}
         parent["children"] = [
             {**c, "avatar_url": None} for c in parent.get("children", [])
         ]
@@ -1717,6 +1768,8 @@ async def on_startup():
     await db.bookings.create_index("parent_id")
     await db.bookings.create_index("tutor_id")
     await db.messages.create_index([("from_user_id", 1), ("to_user_id", 1)])
+    await db.messages.create_index([("from_user_id", 1), ("created_at", -1)])
+    await db.messages.create_index([("from_user_id", 1), ("cold", 1), ("created_at", -1)])
     await db.w9_forms.create_index("tutor_user_id", unique=True)
     await db.posts.create_index("status")
     await db.posts.create_index("author_id")

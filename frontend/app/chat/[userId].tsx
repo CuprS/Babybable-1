@@ -74,7 +74,10 @@ export default function Chat() {
       track("chat_sent", { conversation_id: userId, message_type: "text" });
       setMsgs((prev) => [...prev, m]);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
-    } catch (e) { setText(t); }
+    } catch (e: any) {
+      setText(t);
+      show({ kind: "error", title: "Message not sent", body: e?.message || "Try again" });
+    }
   };
 
   const acceptInvite = async (m: Msg) => {

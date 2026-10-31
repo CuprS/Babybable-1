@@ -1,3 +1,4 @@
+import random
 """End-to-end backend tests for Babybabel bug fixes + booking/payment feature."""
 import os
 import time
@@ -107,8 +108,9 @@ class TestBookingGetACL:
     def booking(self, parent_token, sofia_tutor, parent_profile_ready):
         r = requests.post(f"{API}/bookings", headers=_headers(parent_token), json={
             "tutor_id": sofia_tutor["id"],
-            "date": "2026-06-01",
-            "time": "10:00",
+            # random future Monday (Sofia's weekly availability: mon 09:00/10:00) to avoid slot clashes across runs
+            "date": (__import__("datetime").date(2031, 1, 6) + __import__("datetime").timedelta(weeks=random.randint(0, 400))).isoformat(),
+            "time": random.choice(["09:00", "10:00"]),
             "duration_minutes": 60,
             "language": "Spanish",
             "notes": "TEST_ booking",
