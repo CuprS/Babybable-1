@@ -4,6 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { theme } from "./theme";
+import { useAuth } from "./auth";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const DRAWER_W = Math.min(SCREEN_W * 0.82, 360);
@@ -25,11 +26,18 @@ const MENU = [
   { label: "Blog", icon: "edit-3", route: "/blog" },
 ] as const;
 
+const TUTOR_MENU = [
+  { label: "Write for the blog", icon: "feather", route: "/blog/compose" },
+  { label: "My articles", icon: "file-text", route: "/blog/me" },
+] as const;
+
 export function DrawerProvider({ children }: { children: React.ReactNode }) {
   const [isOpen, setOpen] = useState(false);
   const translate = useRef(new Animated.Value(-DRAWER_W)).current;
   const overlay = useRef(new Animated.Value(0)).current;
   const router = useRouter();
+  const { user } = useAuth();
+  const items = user?.role === "tutor" ? [...MENU, ...TUTOR_MENU] : MENU;
 
   const open = useCallback(() => setOpen(true), []);
   const close = useCallback(() => setOpen(false), []);
@@ -71,12 +79,12 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={{ paddingVertical: theme.space.md }}>
-            {MENU.map((m) => (
+            {items.map((m) => (
               <Pressable
                 key={m.route}
                 onPress={() => go(m.route)}
                 style={({ pressed }) => [styles.item, pressed && { backgroundColor: theme.color.surfaceSecondary }]}
-                testID={`drawer-${m.route.replace("/", "")}`}
+                testID={`drawer-${m.route.slice(1).replace(/\//g, "-")}`}
               >
                 <Feather name={m.icon as any} size={20} color={theme.color.onSurface} />
                 <Text style={styles.itemText}>{m.label}</Text>

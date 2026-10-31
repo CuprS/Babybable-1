@@ -8,6 +8,7 @@ import { apiFetch } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
 import { Button } from "@/src/ui";
+import { AdminBlogPanel } from "@/src/AdminBlogPanel";
 
 interface Stats {
   users: number; parents: number; tutors: number;
@@ -39,6 +40,7 @@ export default function Admin() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [printingId, setPrintingId] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -48,6 +50,7 @@ export default function Admin() {
         apiFetch<{ total_cents: number; count: number; entries: Earning[] }>("/admin/earnings?limit=20").catch(() => ({ total_cents: 0, count: 0, entries: [] as Earning[] })),
         apiFetch<W9Row[]>("/admin/w9?limit=100").catch(() => [] as W9Row[]),
       ]);
+      setReloadKey((k) => k + 1);
       setStats(s); setEvents(e.events); setCounts(e.counts); setEarnings(earn.entries || []); setW9s(w9list || []);
     } catch (err) {
       console.log("admin load err", err);
@@ -123,6 +126,8 @@ export default function Admin() {
               </View>
             ))
           )}
+
+          <AdminBlogPanel reloadKey={reloadKey} />
 
           <Text style={styles.section}>Tax forms (W-9)</Text>
           {w9s.length === 0 ? (

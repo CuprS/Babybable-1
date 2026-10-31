@@ -28,6 +28,8 @@
 - [x] **Analytics** — dual sink: local `/api/events` + **PostHog** (`posthog-react-native` on client, `posthog` on backend). Server captures `signup`, `booking_created`, and forwards all client events. Provide `EXPO_PUBLIC_POSTHOG_KEY` + `POSTHOG_PROJECT_TOKEN` to enable.
 - [x] Global side drawer with 6 marketing landing pages + Download-the-app (web) + Privacy Policy.
 - [x] Delete account (both roles) — cascades bookings, messages, uploads, reviews.
+- [x] **Tutor contribution blog** — public `/blog` list + `/blog/[id]` (readable signed-out), tutor `/blog/compose` (title, topic, summary, body, up to 2 uploaded photos; first = cover) and `/blog/me` (In review / Published / Needs revisions + admin feedback, revise & resubmit). Admin "Blog submissions" panel in `/admin` (publish / reject with required note / unpublish). 4 editorial posts seeded. Backend in `backend/routes/blog.py`; W-9 routes moved to `backend/routes/w9.py`.
+
 - [x] Seeded 2 sample tutors (Sofía García · Marie Dubois).
 - [x] **Tutor weekly availability calendar** — tutors toggle hourly slots per weekday in Edit profile; booking flow and lesson-invitation composer automatically grey out unavailable or already-booked slots.
 - [x] **Auth hardening (P3)** — signup/login rate limited per IP, generic duplicate-email response prevents enumeration, minimum password length 8.

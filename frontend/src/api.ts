@@ -1,4 +1,5 @@
 import { storage } from "@/src/utils/storage";
+import { uploadForm } from "@/src/utils/upload";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL as string;
 export const TOKEN_KEY = "babybabel_token";
@@ -28,22 +29,7 @@ export async function apiFetch<T = any>(
 }
 
 export async function apiUpload(uri: string, name = "photo.jpg", type = "image/jpeg"): Promise<{ path: string; url: string }> {
-  const form = new FormData();
-  // Web: uri is a blob: URL — fetch it and append a real File so FormData actually streams bytes.
-  // Native (iOS/Android): pass the descriptor as { uri, name, type }.
-  const isWeb = typeof document !== "undefined";
-  if (isWeb) {
-    const blob = await fetch(uri).then((r) => r.blob());
-    form.append("file", new File([blob], name, { type: blob.type || type }));
-  } else {
-    form.append("file", { uri, name, type } as any);
-  }
-  const t = await storage.secureGet<string>(TOKEN_KEY, "");
-  const res = await fetch(`${BASE}/api/uploads`, {
-    method: "POST",
-    body: form,
-    headers: t ? { Authorization: `Bearer ${t}` } : {},
-  });
+  const res = await uploadForm(`${BASE}/api/uploads`, uri, name, type, await authHeaders());
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   return res.json();
 }
@@ -125,4 +111,29 @@ export interface Review {
   rating: number;
   comment: string;
   created_at: string;
+}
+
+export type PostStatus = "pending" | "published" | "rejected";
+export interface BlogPost {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_avatar_url?: string | null;
+  title: string;
+  excerpt: string;
+  body: string;
+  cover_image_url?: string;
+  tag: string;
+  image_urls: string[];
+  status: PostStatus;
+  reviewer_notes?: string;
+  submitted_at: string;
+  reviewed_at?: string | null;
+  published_at?: string | null;
+  updated_at: string;
+}
+export const BLOG_TAGS = ["Guides", "Activities", "Culture", "Tips", "Trends", "Tutor spotlight"] as const;
+export const MAX_POST_IMAGES = 2;
+export function readMinutes(text: string) {
+  return Math.max(1, Math.round((text || "").split(/\s+/).length / 200));
 }
