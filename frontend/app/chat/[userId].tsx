@@ -45,6 +45,7 @@ export default function Chat() {
   const [otherRole, setOtherRole] = useState<"parent" | "tutor" | "admin" | null>(null);
   const [otherTutorId, setOtherTutorId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   const load = useCallback(async () => {
@@ -60,6 +61,7 @@ export default function Chat() {
   // Look up other user's role and tutor id (if they are a tutor).
   useEffect(() => {
     if (!userId) return;
+    apiFetch<{ blocked: boolean }>(`/blocks/status/${userId}`).then((r) => setBlocked(r.blocked)).catch(() => {});
     apiFetch<{ role: string }>(`/tutors/by-user/${userId}`)
       .then((t: any) => { setOtherRole("tutor"); setOtherTutorId(t.id); })
       .catch(() => { setOtherRole("parent"); });
@@ -102,17 +104,27 @@ export default function Chat() {
           <Feather name="arrow-left" size={24} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.name} numberOfLines={1}>{name || "Chat"}</Text>
-        {user?.role === "parent" && otherTutorId ? (
-          <Pressable
-            onPress={() => router.push(`/tutor/${otherTutorId}`)}
-            testID="chat-view-tutor"
-            hitSlop={12}
-          >
-            <Feather name="user" size={22} color={theme.color.brand} />
-          </Pressable>
-        ) : (
-          <View style={{ width: 24 }} />
-        )}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.lg }}>
+          {user?.role === "parent" && otherTutorId && !blocked ? (
+            <Pressable
+              onPress={() => router.push(`/tutor/${otherTutorId}`)}
+              testID="chat-view-tutor"
+              hitSlop={12}
+            >
+              <Feather name="user" size={22} color={theme.color.brand} />
+            </Pressable>
+          ) : null}
+          {!blocked && !user?.is_admin && (
+            <Pressable
+              onPress={() => router.push(`/block/${userId}?name=${encodeURIComponent(name || "")}&from=chat`)}
+              testID="chat-block-btn"
+              hitSlop={12}
+              accessibilityLabel="Block"
+            >
+              <Feather name="slash" size={20} color={theme.color.error} />
+            </Pressable>
+          )}
+        </View>
       </View>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }} keyboardVerticalOffset={80}>
         <FlatList
@@ -133,31 +145,40 @@ export default function Chat() {
               </View>
             );
           }}
-          ListEmptyComponent={<Text style={{ color: theme.color.muted, textAlign: "center", marginTop: theme.space["3xl"] }}>Say hi 👋</Text>}
+          ListEmptyComponent={blocked ? null : <Text style={{ color: theme.color.muted, textAlign: "center", marginTop: theme.space["3xl"] }}>Say hi 👋</Text>}
         />
 
-        {user?.role === "tutor" && (
-          <Pressable style={styles.inviteBar} onPress={() => setInviteOpen(true)} testID="chat-open-invite">
-            <Feather name="calendar" size={18} color={theme.color.brand} />
-            <Text style={styles.inviteBarText}>Send a lesson invitation</Text>
-            <Feather name="chevron-up" size={18} color={theme.color.brand} />
-          </Pressable>
-        )}
+        {blocked ? (
+          <View style={styles.blockedBar} testID="chat-blocked-banner">
+            <Feather name="slash" size={16} color={theme.color.onSurfaceSecondary} />
+            <Text style={styles.blockedText}>You can no longer message each other.</Text>
+          </View>
+        ) : (
+          <>
+            {user?.role === "tutor" && (
+              <Pressable style={styles.inviteBar} onPress={() => setInviteOpen(true)} testID="chat-open-invite">
+                <Feather name="calendar" size={18} color={theme.color.brand} />
+                <Text style={styles.inviteBarText}>Send a lesson invitation</Text>
+                <Feather name="chevron-up" size={18} color={theme.color.brand} />
+              </Pressable>
+            )}
 
-        <View style={styles.inputRow}>
-          <TextInput
-            testID="chat-input"
-            value={text}
-            onChangeText={setText}
-            placeholder="Type a message"
-            placeholderTextColor={theme.color.muted}
-            style={styles.input}
-            multiline
-          />
-          <Pressable onPress={send} style={styles.send} testID="chat-send">
-            <Feather name="send" size={18} color="#fff" />
-          </Pressable>
-        </View>
+            <View style={styles.inputRow}>
+              <TextInput
+                testID="chat-input"
+                value={text}
+                onChangeText={setText}
+                placeholder="Type a message"
+                placeholderTextColor={theme.color.muted}
+                style={styles.input}
+                multiline
+              />
+              <Pressable onPress={send} style={styles.send} testID="chat-send">
+                <Feather name="send" size={18} color="#fff" />
+              </Pressable>
+            </View>
+          </>
+        )}
       </KeyboardAvoidingView>
 
       <InvitationComposer
@@ -355,6 +376,9 @@ const styles = StyleSheet.create({
   inviteBar: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm, backgroundColor: theme.color.brandSoft, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.color.brand },
   inviteBarText: { color: theme.color.brandDark, fontWeight: "700", flex: 1 },
   inputRow: { flexDirection: "row", alignItems: "flex-end", padding: theme.space.md, gap: theme.space.sm, borderTopColor: theme.color.border, borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: theme.color.surface },
+  blockedBar: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.space.sm, padding: theme.space.lg, borderTopColor: theme.color.border, borderTopWidth: StyleSheet.hairlineWidth, backgroundColor: theme.color.surfaceSecondary },
+  blockedText: { color: theme.color.onSurfaceSecondary, fontWeight: "500" },
+
   input: { flex: 1, minHeight: 40, maxHeight: 120, paddingHorizontal: theme.space.md, paddingVertical: 10, borderRadius: 20, backgroundColor: theme.color.surfaceSecondary, color: theme.color.onSurface, fontSize: theme.font.lg },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.color.brand, alignItems: "center", justifyContent: "center" },
 });

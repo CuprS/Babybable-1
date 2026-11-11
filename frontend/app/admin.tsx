@@ -9,6 +9,7 @@ import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
 import { Button } from "@/src/ui";
 import { AdminBlogPanel } from "@/src/AdminBlogPanel";
+import { AdminBlocksPanel } from "@/src/AdminBlocksPanel";
 
 interface Stats {
   users: number; parents: number; tutors: number;
@@ -128,6 +129,7 @@ export default function Admin() {
           )}
 
           <AdminBlogPanel reloadKey={reloadKey} />
+          <AdminBlocksPanel reloadKey={reloadKey} />
 
           <Text style={styles.section}>Tax forms (W-9)</Text>
           {w9s.length === 0 ? (

@@ -813,6 +813,10 @@ async def list_tutors(
             {"location": {"$regex": needle, "$options": "i"}},
             {"languages": {"$regex": needle, "$options": "i"}},
         ]
+    if u:
+        hidden = await blocked_user_ids(u["id"])
+        if hidden:
+            query["user_id"] = {"$nin": list(hidden)}
     docs = await db.tutors.find(query, {"_id": 0}).to_list(200)
 
     # Distance filter — only when the caller is a parent with saved coordinates.
@@ -857,9 +861,10 @@ async def list_tutors(
 
 
 @api.get("/tutors/map")
-async def tutors_map():
+async def tutors_map(u: Optional[dict] = Depends(optional_user)):
+    hidden = await blocked_user_ids(u["id"]) if u else set()
     docs = await db.tutors.find(
-        {},
+        {"user_id": {"$nin": list(hidden)}} if hidden else {},
         {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "latitude": 1, "longitude": 1, "location": 1, "locations": 1, "hourly_rate_cents": 1, "allows_remote": 1},
     ).to_list(200)
     out = []
@@ -879,9 +884,9 @@ async def tutors_map():
 
 
 @api.get("/tutors/{tutor_id}", response_model=TutorProfile)
-async def get_tutor(tutor_id: str):
+async def get_tutor(tutor_id: str, u: Optional[dict] = Depends(optional_user)):
     d = await db.tutors.find_one({"id": tutor_id}, {"_id": 0})
-    if not d:
+    if not d or (u and await blocked_between(u["id"], d["user_id"])):
         raise HTTPException(404, "Tutor not found")
     return tutor_doc_to_model(d)
 
@@ -957,7 +962,7 @@ async def create_booking(body: BookingCreate, u: dict = Depends(current_user)):
     if u["role"] != "parent":
         raise HTTPException(403, "Only parents can book")
     t = await db.tutors.find_one({"id": body.tutor_id}, {"_id": 0})
-    if not t:
+    if not t or await blocked_between(u["id"], t["user_id"]):
         raise HTTPException(404, "Tutor not found")
     p = await db.parents.find_one({"user_id": u["id"]}, {"_id": 0}) or {}
     remote = bool(t.get("allows_remote"))
@@ -1122,6 +1127,20 @@ async def stripe_webhook(request: Request, stripe_signature: str = Header(None, 
 
 
 # ---- Messages ----
+async def blocked_between(a: str, b: str) -> bool:
+    return bool(await db.blocks.find_one({"$or": [
+        {"blocker_id": a, "blocked_id": b}, {"blocker_id": b, "blocked_id": a},
+    ]}, {"_id": 1}))
+
+
+async def blocked_user_ids(uid: str) -> set:
+    """Everyone this user blocked or was blocked by."""
+    docs = await db.blocks.find({"$or": [{"blocker_id": uid}, {"blocked_id": uid}]}, {"_id": 0, "blocker_id": 1, "blocked_id": 1}).to_list(5000)
+    return {d["blocked_id"] if d["blocker_id"] == uid else d["blocker_id"] for d in docs}
+
+
+BLOCKED_MSG = "You can no longer contact this person."
+
 MSG_PER_MINUTE = 20
 MSG_PER_DAY = 300
 COLD_MSG_PER_DAY = 10
@@ -1130,6 +1149,8 @@ COLD_MSG_PER_DAY = 10
 async def enforce_message_limits(u: dict, to_user: dict) -> bool:
     """Throttle chat spam. Returns True when this message opens a cold conversation
     (tutor -> family with no prior chat or booking)."""
+    if await blocked_between(u["id"], to_user["id"]):
+        raise HTTPException(403, BLOCKED_MSG)
     now = datetime.now(timezone.utc)
     minute_ago = (now - timedelta(minutes=1)).isoformat()
     day_ago = (now - timedelta(days=1)).isoformat()
@@ -1223,6 +1244,8 @@ async def accept_invitation(message_id: str, u: dict = Depends(current_user)):
         raise HTTPException(404, "Invitation not found")
     if msg["to_user_id"] != u["id"]:
         raise HTTPException(403, "Not your invitation")
+    if await blocked_between(u["id"], msg["from_user_id"]):
+        raise HTTPException(403, BLOCKED_MSG)
     inv = msg.get("invitation") or {}
     if inv.get("status") != "pending":
         raise HTTPException(400, f"Invitation is already {inv.get('status')}")
@@ -1296,9 +1319,9 @@ async def decline_invitation(message_id: str, u: dict = Depends(current_user)):
 
 
 @api.get("/tutors/by-user/{user_id}", response_model=TutorProfile)
-async def tutor_by_user(user_id: str):
+async def tutor_by_user(user_id: str, u: Optional[dict] = Depends(optional_user)):
     d = await db.tutors.find_one({"user_id": user_id}, {"_id": 0})
-    if not d:
+    if not d or (u and await blocked_between(u["id"], user_id)):
         raise HTTPException(404, "Tutor profile not found")
     return tutor_doc_to_model(d)
 
@@ -1310,10 +1333,11 @@ async def get_threads(u: dict = Depends(current_user)):
         {"$sort": {"created_at": -1}},
     ]
     docs = await db.messages.aggregate(pipeline).to_list(1000)
+    hidden = await blocked_user_ids(u["id"])
     seen: dict = {}
     for d in docs:
         other = d["to_user_id"] if d["from_user_id"] == u["id"] else d["from_user_id"]
-        if other in seen:
+        if other in seen or other in hidden:
             continue
         seen[other] = {"other_user_id": other, "last_message": d["text"], "created_at": d["created_at"]}
     # attach user info
@@ -1331,6 +1355,8 @@ async def get_threads(u: dict = Depends(current_user)):
 
 @api.get("/messages/thread/{other_user_id}", response_model=List[Message])
 async def get_thread(other_user_id: str, u: dict = Depends(current_user)):
+    if await blocked_between(u["id"], other_user_id):
+        return []
     docs = await db.messages.find(
         {"$or": [
             {"from_user_id": u["id"], "to_user_id": other_user_id},
@@ -1346,7 +1372,8 @@ async def get_thread(other_user_id: str, u: dict = Depends(current_user)):
 async def create_review(body: ReviewCreate, u: dict = Depends(current_user)):
     if u["role"] != "parent":
         raise HTTPException(403, "Only parents can review")
-    if not (await db.tutors.find_one({"id": body.tutor_id})):
+    t = await db.tutors.find_one({"id": body.tutor_id}, {"_id": 0, "user_id": 1})
+    if not t or await blocked_between(u["id"], t["user_id"]):
         raise HTTPException(404, "Tutor not found")
     rid = str(uuid.uuid4())
     r = {
@@ -1462,6 +1489,8 @@ async def get_parent_public(user_id: str, u: dict = Depends(current_user)):
     if not fresh:
         raise HTTPException(404, "User not found")
     is_owner = u["id"] == user_id
+    if not is_owner and not u.get("is_admin") and await blocked_between(u["id"], user_id):
+        raise HTTPException(404, "Parent profile not found")
     if not is_owner and not u.get("is_admin"):
         # Only tutors the family booked with or chatted with may view the profile.
         if u.get("role") != "tutor" or not await users_have_relationship(u["id"], user_id, parent_must_reach_out=True):
@@ -1680,6 +1709,7 @@ async def delete_account(u: dict = Depends(current_user)):
     await db.favorites.delete_many({"user_id": uid})
     await db.uploads.delete_many({"owner_id": uid})
     await db.posts.delete_many({"author_id": uid})
+    await db.blocks.delete_many({"$or": [{"blocker_id": uid}, {"blocked_id": uid}]})
     # Platform earnings intentionally preserved (accounting record); no PII lives on that doc.
     await db.users.delete_one({"id": uid})
     return {"deleted": True}
@@ -1769,6 +1799,8 @@ async def on_startup():
     await db.bookings.create_index("tutor_id")
     await db.messages.create_index([("from_user_id", 1), ("to_user_id", 1)])
     await db.messages.create_index([("from_user_id", 1), ("created_at", -1)])
+    await db.blocks.create_index([("blocker_id", 1), ("blocked_id", 1)], unique=True)
+    await db.blocks.create_index("blocked_id")
     await db.messages.create_index([("from_user_id", 1), ("cold", 1), ("created_at", -1)])
     await db.w9_forms.create_index("tutor_user_id", unique=True)
     await db.posts.create_index("status")
@@ -1818,9 +1850,10 @@ async def root():
 
 
 # Feature routers (imported late — they pull shared deps from this module).
-from routes import blog as _blog_routes, w9 as _w9_routes  # noqa: E402
+from routes import blog as _blog_routes, w9 as _w9_routes, blocks as _blocks_routes  # noqa: E402
 api.include_router(_blog_routes.router)
 api.include_router(_w9_routes.router)
+api.include_router(_blocks_routes.router)
 app.include_router(api)
 
 

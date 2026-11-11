@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import Slider from "@react-native-community/slider";
 import { apiFetch, fileUrl, Tutor } from "@/src/api";
 import { useAuth } from "@/src/auth";
@@ -74,7 +74,7 @@ export default function Explore() {
     try { const ids = await apiFetch<string[]>("/favorites"); setFavs(new Set(ids)); } catch {}
   }, [user]);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   useEffect(() => { loadFavs(); }, [loadFavs]);
   useEffect(() => {
     if (user?.role !== "parent") return;

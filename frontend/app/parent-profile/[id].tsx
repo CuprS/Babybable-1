@@ -64,7 +64,16 @@ export default function ParentPublic() {
           <Feather name="arrow-left" size={22} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>Family profile</Text>
-        <View style={{ width: 22 }} />
+        {!isOwner && user && !user.is_admin ? (
+          <Pressable
+            onPress={() => router.push(`/block/${parent.user_id}?name=${encodeURIComponent(parent.name)}&from=profile`)}
+            hitSlop={12}
+            testID="parent-block-btn"
+            accessibilityLabel="Block family"
+          >
+            <Feather name="slash" size={20} color={theme.color.error} />
+          </Pressable>
+        ) : <View style={{ width: 22 }} />}
       </View>
 
       <ScrollView

@@ -45,7 +45,16 @@ export default function TutorDetail() {
   }, [reviews, reviewFilter]);
 
   if (loading) return <View style={styles.center}><ActivityIndicator color={theme.color.brand} /></View>;
-  if (!tutor) return <View style={styles.center}><Text>Tutor not found</Text></View>;
+  if (!tutor) {
+    return (
+      <SafeAreaView style={styles.center}>
+        <Text style={{ color: theme.color.onSurfaceSecondary, marginBottom: theme.space.lg }}>Tutor not found</Text>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="tutor-notfound-back">
+          <Text style={{ color: theme.color.brandDark, fontWeight: "700", textDecorationLine: "underline" }}>Go back</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <View style={styles.root} testID="tutor-detail-screen">
@@ -211,6 +220,17 @@ export default function TutorDetail() {
         <Pressable onPress={() => router.back()} style={styles.iconBtn} testID="tutor-back-btn">
           <Feather name="arrow-left" size={22} color="#fff" />
         </Pressable>
+        <View style={{ flex: 1 }} />
+        {user && !user.is_admin && user.id !== tutor.user_id && (
+          <Pressable
+            onPress={() => router.push(`/block/${tutor.user_id}?name=${encodeURIComponent(tutor.name)}&from=profile`)}
+            style={styles.iconBtn}
+            testID="tutor-block-btn"
+            accessibilityLabel="Block tutor"
+          >
+            <Feather name="slash" size={20} color="#fff" />
+          </Pressable>
+        )}
         <Pressable
           onPress={() => user && router.push(`/chat/${tutor.user_id}?name=${encodeURIComponent(tutor.name)}`)}
           style={styles.iconBtn}
