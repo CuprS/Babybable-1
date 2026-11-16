@@ -10,6 +10,7 @@ import { theme } from "@/src/theme";
 import { Button } from "@/src/ui";
 import { AdminBlogPanel } from "@/src/AdminBlogPanel";
 import { AdminBlocksPanel } from "@/src/AdminBlocksPanel";
+import { AdminSafetyPanel } from "@/src/AdminSafetyPanel";
 
 interface Stats {
   users: number; parents: number; tutors: number;
@@ -129,6 +130,7 @@ export default function Admin() {
           )}
 
           <AdminBlogPanel reloadKey={reloadKey} />
+          <AdminSafetyPanel reloadKey={reloadKey} />
           <AdminBlocksPanel reloadKey={reloadKey} />
 
           <Text style={styles.section}>Tax forms (W-9)</Text>

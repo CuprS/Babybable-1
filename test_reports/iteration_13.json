@@ -1,0 +1,48 @@
+{
+  "summary": "Session 12 safety retest. Backend: test_babybabel_session12_safety.py was updated to 20 tests (new expectations plus 2 new evasion probes) and run against localhost:8001 with -n 0. All 5 targeted fixes are verified. (1) Blocks are now copied on signup: X blocked -> X deleted -> x+a and then x+b sign up, and BOTH stay blocked. A live alias (x+1 while X still exists) is blocked and X stays blocked. Gmail dot and googlemail variants match; dots on non-Gmail domains are correctly NOT stripped. (2) A paused user can DELETE /auth/me (200). Re-signing up with an alias of the same email returns 423, login returns 423, and the same email again returns a generic 400. A re-created paused TUTOR gets a tutors doc with suspended:true that is hidden from /tutors and returns 404 on detail; after reinstatement it becomes visible. (3) The email 429 retry was unit-tested with a mocked transport (new tests/test_email_service_retry.py, 4/4): it retries with 1/2/4s backoff, honours Retry-After, stops after 4 attempts and doesn't retry on 500. 2 NEW evasion holes found by probes (2 FAILED). Also, in the full run 5 alert emails were still dropped by the live provider (429 after all retries). The 2 email tests passed when re-run on their own after a 60s cooldown. Regression: session11 blocks + blog 27/27, session10 privacy/spam 16/16. Frontend (375x667, 2 reproductions): a signed-in user who gets paused mid-session (3rd block placed via API, then tapping the Bookings or Messages tab) now lands on /suspended. Back to start goes to /onboarding and clears the flag, so the login link works and doesn't bounce back. Contact support goes to /support, and browser back returns to /suspended. Logging in as a paused user goes to /suspended. Admin Safety panel: an invalid email shows the 'Couldn't save / Enter a valid email address' toast, Save is disabled when the value is unchanged, and paused rows are listed.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/auth/signup", "issue": "Evasion: a paused account that is NOT deleted can sign up an alias (x+alt@) and gets an ACTIVE account (201), even though all 3 blocks are copied to it. Signup only checks account_tombstones. It never checks for a live paused account with the same fingerprint and never re-runs the auto-pause count after copying blocks. Test: TestEvasionProbes::test_alias_of_live_paused_account_is_paused", "priority": "HIGH"},
+      {"endpoint": "DELETE /api/auth/me", "issue": "Tombstone downgrade: server.py:1763-1767 $sets suspended=bool(u.suspended). If X is paused and deleted (tombstone suspended=true) and a live non-paused alias Y (created before the pause) is deleted afterwards, the tombstone is overwritten to suspended=false and the next signup x+z is ACTIVE (201). Test: TestEvasionProbes::test_tombstone_not_downgraded_by_other_alias_delete", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "email_service.send_email", "issue": "The retry works, but its total backoff is only about 7s. In a burst (about 7 auto-pause alerts in 30s during the pytest run) the provider kept returning 429 and 5 alerts were logged 'Email send failed: 429' and lost. Safety alerts still aren't durable."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AdminSafetyPanel", "issues": ["saveEmail's catch-all shows 'Enter a valid email address' for ANY error (network, 401/500), not just 422. Minor."]},
+      {"screen": "suspended / login / admin (web)", "issues": ["A faint vertical shadow is visible along the left edge in the web preview (stack card shadow). Cosmetic."]}
+    ],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_babybabel_session12_safety.py",
+    "/app/backend/tests/test_email_service_retry.py",
+    "/app/test_reports/pytest/s12_safety_retest.xml",
+    "/app/test_reports/pytest/s12_regression.xml"
+  ],
+  "action_items": [
+    "HIGH: In signup, after copying blocks, count the distinct blockers on the new account (same rule as _maybe_auto_suspend) and/or check for an existing live suspended user whose email_fingerprint matches. If either is true, create the account paused (and its tutor doc suspended:true) and return 423.",
+    "HIGH: In delete_account, never downgrade a tombstone. Use {$max: {suspended: ...}} or only $set suspended:true, and $setOnInsert otherwise, so deleting a non-paused alias can't clear the paused state of the same fingerprint. Decide whether an admin reinstatement should clear the tombstone explicitly.",
+    "MEDIUM: Make safety/pause alert emails durable. Persist them to an outbox collection and retry with longer backoff (minutes) or a background worker, because a 7s in-request retry still drops alerts in bursts.",
+    "LOW: AdminSafetyPanel: show 'Enter a valid email address' only on 422. Show a generic 'Couldn't save, try again' for other errors."
+  ],
+  "critical_code_review_comments": [
+    "server.py signup: carried-over blocks keep the original created_at. If the source account was reinstated, the new account's reinstated_at is unset, so all historical blocks count toward its pause threshold. That's consistent, but note it when fixing the live-paused-alias hole.",
+    "server.py delete_account: tombstones are also created for accounts that are only blocked (suspended:false). That's harmless, but they accumulate forever with no TTL.",
+    "routes/blocks.py admin_suspended: blocked_by counts all blockers, including ones from before a reinstatement (the LOW item from iteration 12 is still open)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_babybabel_session12_safety.py (new expectations, live-alias/gmail-dot/paused-tutor tests, 2 evasion probes, DB cleanup of TEST blocks/tombstones by fingerprint)",
+    "/app/backend/tests/test_email_service_retry.py (new)"
+  ],
+  "success_rate": {"backend": "90% (18/20 session12, the 2 failures are new evasion probes; 2 email tests flaky under provider rate limits and pass in isolation; email retry unit 4/4; regression 43/43)", "frontend": "100% (mid-session pause redirect x2, paused login, back-to-start, support, admin invalid-email toast)"},
+  "seed_data_creation": "Created and then deleted TEST_ users via pytest and seed_session12_safety_ui.py (x2). Removed the tombstones my run left in MongoDB. Blocks: 3 remain, none orphaned. Alert email set to delivered@resend.dev during tests and RESTORED to copperstone17@gmail.com (verified). Not mine and left untouched: user TEST_blkparentA (test_blkparenta_957173aa@example.com, created 01:10:27 before my run) and 4 tombstones (deleted_at 01:04-01:10, suspended:false) that were created before my run.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with EXPO_BACKEND_URL=http://localhost:8001 -n 0. The full session12 run causes a burst of auto-pause emails, so the provider returns 429 and the 2 TestSafetyEmailSend tests can flake. Run them alone with -k SafetyEmail after about 60s of cooldown. The TestEvasionProbes tests are the regression tests for the 2 HIGH items. Login via the public URL is rate-limited per ingress IP (8/5min), so restart the backend if the UI shows 'Too many attempts'. The UI mid-pause flow: seed_session12_safety_ui.py, log in as Q, POST /api/blocks with blockers[2].token via page.request, then tap a tab.",
+  "rca_of_issue": "Live-paused alias: signup (server.py ~632-667) decides paused only from account_tombstones (which exist only after deletion), and the copy loop doesn't evaluate the threshold. Tombstone downgrade: delete_account (server.py 1763-1767) $sets suspended from the account being deleted, so a later delete of any non-paused account with the same fingerprint overwrites suspended:true to false."
+}

@@ -22,7 +22,9 @@ import math
 import re
 import time
 import threading
+import asyncio
 import base64
+import hashlib
 import binascii
 from cryptography.fernet import Fernet, MultiFernet, InvalidToken
 from collections import defaultdict, deque
@@ -553,7 +555,19 @@ def make_token(user_id: str, role: str) -> str:
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
-async def current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
+SUSPENDED_MSG = "Your account is paused while the Babybabel team reviews it. Please contact support."
+
+
+def email_fingerprint(email: str) -> str:
+    """Stable, non-reversible id for an email (lower-cased, +tag stripped) — survives account deletion."""
+    local, _, domain = email.lower().strip().partition("@")
+    local = local.split("+", 1)[0]
+    if domain in ("gmail.com", "googlemail.com"):  # Gmail ignores dots
+        local, domain = local.replace(".", ""), "gmail.com"
+    return hashlib.sha256(f"{local}@{domain}".encode()).hexdigest()
+
+
+async def _token_user(token: Optional[str]) -> dict:
     if not token:
         raise HTTPException(401, "Not authenticated")
     try:
@@ -567,15 +581,28 @@ async def current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
     return user
 
 
+async def current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
+    user = await _token_user(token)
+    if user.get("suspended") and not user.get("is_admin"):
+        raise HTTPException(423, SUSPENDED_MSG)
+    return user
+
+
+async def current_user_even_if_paused(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
+    """Used only for account deletion — a paused user may still delete their data."""
+    return await _token_user(token)
+
+
 async def optional_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[dict]:
     """Same as current_user but returns None (not 401) when no valid token."""
     if not token:
         return None
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
+        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
     except Exception:
         return None
+    return None if (user and user.get("suspended") and not user.get("is_admin")) else user
 
 
 def user_to_public(u: dict) -> UserPublic:
@@ -601,6 +628,14 @@ async def signup(body: SignupRequest, request: Request):
         # Generic error prevents easy email enumeration via signup.
         raise HTTPException(400, "We couldn't create that account. Try logging in or use a different email.")
     uid = str(uuid.uuid4())
+    fp = email_fingerprint(email)
+    # Block-evasion guard: a deleted account that was paused stays paused if re-created.
+    tomb = await db.account_tombstones.find_one({"email_fp": fp}, {"_id": 0})
+    if not (tomb and tomb.get("suspended")):
+        # A live paused account with the same email (e.g. x+alt@ while x@ is paused) also counts.
+        related = await db.blocks.distinct("blocked_id", {"blocked_email_fp": fp})
+        if related and await db.users.find_one({"id": {"$in": related}, "suspended": True}, {"_id": 1}):
+            tomb = {"suspended": True}
     doc = {
         "id": uid,
         "email": email,
@@ -610,7 +645,18 @@ async def signup(body: SignupRequest, request: Request):
         "avatar_url": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
+    if tomb and tomb.get("suspended"):
+        doc.update({"suspended": True, "suspended_at": doc["created_at"],
+                    "suspended_reason": "Re-created an account that was paused for review"})
     await db.users.insert_one(doc)
+    # Block-evasion guard: every block placed on an account with this email (deleted or a
+    # +alias / Gmail-dot variant) is copied onto the new account. Originals stay untouched.
+    for b in await db.blocks.find({"blocked_email_fp": fp}, {"_id": 0}).to_list(1000):
+        await db.blocks.update_one(
+            {"blocker_id": b["blocker_id"], "blocked_id": uid},
+            {"$setOnInsert": {**b, "id": str(uuid.uuid4()), "blocked_id": uid, "blocked_deleted": False, "carried_over": True}},
+            upsert=True,
+        )
     # If tutor, create an empty tutor profile
     if body.role == "tutor":
         tid = str(uuid.uuid4())
@@ -621,7 +667,10 @@ async def signup(body: SignupRequest, request: Request):
             "accreditation_urls": [], "hero_image_url": None,
             "weekly_availability": {},
             "created_at": datetime.now(timezone.utc).isoformat(),
+            **({"suspended": True} if doc.get("suspended") else {}),
         })
+    if doc.get("suspended"):
+        raise HTTPException(423, SUSPENDED_MSG)
     return AuthResponse(access_token=make_token(uid, body.role), user=user_to_public(doc))
 
 
@@ -632,6 +681,8 @@ async def login(body: LoginRequest, request: Request):
     u = await db.users.find_one({"email": email})
     if not u or not verify_password(body.password, u["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
+    if u.get("suspended") and not u.get("is_admin"):
+        raise HTTPException(423, SUSPENDED_MSG)
     return AuthResponse(access_token=make_token(u["id"], u["role"]), user=user_to_public(u))
 
 
@@ -813,6 +864,7 @@ async def list_tutors(
             {"location": {"$regex": needle, "$options": "i"}},
             {"languages": {"$regex": needle, "$options": "i"}},
         ]
+    query["suspended"] = {"$ne": True}
     if u:
         hidden = await blocked_user_ids(u["id"])
         if hidden:
@@ -864,7 +916,7 @@ async def list_tutors(
 async def tutors_map(u: Optional[dict] = Depends(optional_user)):
     hidden = await blocked_user_ids(u["id"]) if u else set()
     docs = await db.tutors.find(
-        {"user_id": {"$nin": list(hidden)}} if hidden else {},
+        {"suspended": {"$ne": True}, **({"user_id": {"$nin": list(hidden)}} if hidden else {})},
         {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "latitude": 1, "longitude": 1, "location": 1, "locations": 1, "hourly_rate_cents": 1, "allows_remote": 1},
     ).to_list(200)
     out = []
@@ -886,7 +938,7 @@ async def tutors_map(u: Optional[dict] = Depends(optional_user)):
 @api.get("/tutors/{tutor_id}", response_model=TutorProfile)
 async def get_tutor(tutor_id: str, u: Optional[dict] = Depends(optional_user)):
     d = await db.tutors.find_one({"id": tutor_id}, {"_id": 0})
-    if not d or (u and await blocked_between(u["id"], d["user_id"])):
+    if not d or d.get("suspended") or (u and await blocked_between(u["id"], d["user_id"])):
         raise HTTPException(404, "Tutor not found")
     return tutor_doc_to_model(d)
 
@@ -1693,7 +1745,7 @@ async def read_all(u: dict = Depends(current_user)):
 
 # ---- Delete account ----
 @api.delete("/auth/me")
-async def delete_account(u: dict = Depends(current_user)):
+async def delete_account(u: dict = Depends(current_user_even_if_paused)):
     uid = u["id"]
     if u["role"] == "tutor":
         await db.tutors.delete_many({"user_id": uid})
@@ -1709,7 +1761,19 @@ async def delete_account(u: dict = Depends(current_user)):
     await db.favorites.delete_many({"user_id": uid})
     await db.uploads.delete_many({"owner_id": uid})
     await db.posts.delete_many({"author_id": uid})
-    await db.blocks.delete_many({"$or": [{"blocker_id": uid}, {"blocked_id": uid}]})
+    # Blocks this user placed go away; blocks placed ON them are kept (keyed by email
+    # fingerprint) so deleting and re-signing up can't be used to evade a block.
+    await db.blocks.delete_many({"blocker_id": uid})
+    fp = email_fingerprint(u["email"])
+    await db.blocks.update_many({"blocked_id": uid}, {"$set": {"blocked_email_fp": fp, "blocked_deleted": True}})
+    if u.get("suspended") or await db.blocks.find_one({"blocked_email_fp": fp}, {"_id": 1}):
+        await db.account_tombstones.update_one(
+            {"email_fp": fp},
+            # $max: a paused flag is never lowered by deleting a non-paused alias later.
+            {"$set": {"email_fp": fp, "deleted_at": datetime.now(timezone.utc).isoformat()},
+             "$max": {"suspended": bool(u.get("suspended"))}},
+            upsert=True,
+        )
     # Platform earnings intentionally preserved (accounting record); no PII lives on that doc.
     await db.users.delete_one({"id": uid})
     return {"deleted": True}
@@ -1801,6 +1865,9 @@ async def on_startup():
     await db.messages.create_index([("from_user_id", 1), ("created_at", -1)])
     await db.blocks.create_index([("blocker_id", 1), ("blocked_id", 1)], unique=True)
     await db.blocks.create_index("blocked_id")
+    await db.blocks.create_index("blocked_email_fp", sparse=True)
+    await db.account_tombstones.create_index("email_fp", unique=True)
+    asyncio.create_task(_blocks_routes.email_outbox_worker())
     await db.messages.create_index([("from_user_id", 1), ("cold", 1), ("created_at", -1)])
     await db.w9_forms.create_index("tutor_user_id", unique=True)
     await db.posts.create_index("status")

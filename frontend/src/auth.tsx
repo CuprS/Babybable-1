@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { storage } from "@/src/utils/storage";
-import { apiFetch, TOKEN_KEY, UserPublic, Role } from "@/src/api";
+import { apiFetch, TOKEN_KEY, UserPublic, Role, onAccountSuspended } from "@/src/api";
 
 interface AuthState {
   user: UserPublic | null;
   loading: boolean;
+  suspended: boolean;
+  clearSuspended: () => void;
   signIn: (email: string, password: string) => Promise<UserPublic>;
   signUp: (email: string, password: string, name: string, role: Role) => Promise<UserPublic>;
   signOut: () => Promise<void>;
@@ -16,6 +18,7 @@ const AuthCtx = createContext<AuthState | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserPublic | null>(null);
   const [loading, setLoading] = useState(true);
+  const [suspended, setSuspended] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -33,12 +36,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => { await refresh(); setLoading(false); })();
   }, [refresh]);
 
+  // A paused account gets signed out everywhere; AuthGate routes to /suspended.
+  useEffect(() => {
+    onAccountSuspended(async () => {
+      await storage.secureRemove(TOKEN_KEY);
+      setSuspended(true);
+      setUser(null);
+    });
+    return () => onAccountSuspended(null);
+  }, []);
+
   const signIn = async (email: string, password: string) => {
     const data = await apiFetch<{ access_token: string; user: UserPublic }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
     await storage.secureSet(TOKEN_KEY, data.access_token);
+    setSuspended(false);
     setUser(data.user);
     return data.user;
   };
@@ -59,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut, refresh }}>
+    <AuthCtx.Provider value={{ user, loading, suspended, clearSuspended: () => setSuspended(false), signIn, signUp, signOut, refresh }}>
       {children}
     </AuthCtx.Provider>
   );

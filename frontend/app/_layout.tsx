@@ -17,24 +17,26 @@ LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
 
 function AuthGate() {
-  const { user, loading } = useAuth();
+  const { user, loading, suspended } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
     if (loading) return;
-    const publicRoutes = ["find-tutor", "become-tutor", "languages-near-you", "support", "mission", "blog", "privacy"];
+    const publicRoutes = ["find-tutor", "become-tutor", "languages-near-you", "support", "mission", "blog", "privacy", "suspended"];
     const inAuth = segments[0] === "(auth)" || segments[0] === "onboarding";
     const isPublic = publicRoutes.includes(String(segments[0] ?? ""));
     const inAdmin = segments[0] === "admin";
-    if (!user && !inAuth && !isPublic) {
+    if (!user && suspended && segments[0] !== "suspended" && segments[0] !== "support") {
+      router.replace("/suspended");
+    } else if (!user && !inAuth && !isPublic) {
       router.replace("/onboarding");
     } else if (user && inAuth) {
       router.replace(user.is_admin ? "/admin" : "/(tabs)");
     } else if (user && user.is_admin && !inAdmin && segments[0] !== undefined && !isPublic) {
       if (segments[0] === "(tabs)") router.replace("/admin");
     }
-  }, [user, loading, segments, router]);
+  }, [user, loading, suspended, segments, router]);
 
   return (
     <Stack

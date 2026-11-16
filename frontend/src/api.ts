@@ -23,9 +23,16 @@ export async function apiFetch<T = any>(
   const data = text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null;
   if (!res.ok) {
     const msg = (data && typeof data === "object" && "detail" in data) ? (data as any).detail : `Request failed (${res.status})`;
+    if (res.status === 423) suspendedHandler?.(typeof msg === "string" ? msg : "");
     throw new Error(typeof msg === "string" ? msg : "Request failed");
   }
   return data as T;
+}
+
+/** Called when the server reports the signed-in account is paused (HTTP 423). */
+let suspendedHandler: ((message: string) => void) | null = null;
+export function onAccountSuspended(fn: ((message: string) => void) | null) {
+  suspendedHandler = fn;
 }
 
 export async function apiUpload(uri: string, name = "photo.jpg", type = "image/jpeg"): Promise<{ path: string; url: string }> {
