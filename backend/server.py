@@ -1,7 +1,8 @@
 """Babybabel API — app assembly.
 
 Feature code lives in routes/ (HTTP endpoints), core.py (shared infrastructure),
-models.py (request/response shapes), booking_service.py, workers.py and seed.py.
+models.py (request/response shapes), storage.py (uploaded files), email_service.py,
+booking_service.py, workers.py and seed.py.
 Run with: uvicorn server:app
 """
 import asyncio
@@ -13,7 +14,8 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 
 import core
-from core import EMERGENT_KEY, _init_storage_sync, client, db, logger  # noqa: F401  (re-exported)
+import storage
+from core import client, db, logger  # noqa: F401  (re-exported)
 # Re-exported for tests and scripts that do `import server`.
 from core import decrypt_tin, encrypt_tin, is_legacy_tin_token  # noqa: F401
 from seed import backfill_slot_keys, ensure_indexes, migrate_w9_tins, seed_data
@@ -28,12 +30,11 @@ async def lifespan(app: FastAPI):
 
     await ensure_indexes()
     await backfill_slot_keys()
-    if EMERGENT_KEY:
-        try:
-            await run_in_threadpool(_init_storage_sync)
-            logger.info("Object storage initialized")
-        except Exception as e:
-            logger.warning(f"Storage init deferred: {e}")
+    problem = await run_in_threadpool(storage.check)
+    if problem:
+        logger.error(f"File uploads won't work: {problem}")
+    else:
+        logger.info(f"File storage: {storage.BACKEND}")
     await seed_data()
     await blog_routes.seed_editorial_posts()
     await migrate_w9_tins()
@@ -48,17 +49,17 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Babybabel API", lifespan=lifespan)
 
-# Browsers may only call the API from our own app origins. Native apps send no Origin
-# header, so CORS doesn't affect them. Override with CORS_ORIGINS (comma-separated) for a custom domain.
+# Browsers may only call the API from the app's own web origins. Native apps send no Origin
+# header, so CORS doesn't affect them. Set CORS_ORIGINS (comma-separated) to your web app's
+# address(es), e.g. https://babybabel.com. Local development servers are allowed by default.
 _cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+if core.PUBLIC_WEB_URL and core.PUBLIC_WEB_URL not in _cors_origins:
+    _cors_origins.append(core.PUBLIC_WEB_URL)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=False,  # bearer tokens only — no cookies
     allow_origins=_cors_origins,
-    allow_origin_regex=os.environ.get(
-        "CORS_ORIGIN_REGEX",
-        r"^https://papyrus-tutors(-[a-z0-9-]+)?\.(preview\.emergentagent\.com|emergent\.host)$",
-    ),
+    allow_origin_regex=os.environ.get("CORS_ORIGIN_REGEX", r"^http://(localhost|127\.0\.0\.1)(:\d+)?$"),
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Stripe-Signature"],
 )

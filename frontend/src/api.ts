@@ -22,11 +22,27 @@ export async function apiFetch<T = any>(
   const text = await res.text();
   const data = text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null;
   if (!res.ok) {
-    const msg = (data && typeof data === "object" && "detail" in data) ? (data as any).detail : `Request failed (${res.status})`;
-    if (res.status === 423) suspendedHandler?.(typeof msg === "string" ? msg : "");
-    throw new Error(typeof msg === "string" ? msg : "Request failed");
+    const msg = errorMessage(data, res.status);
+    if (res.status === 423) suspendedHandler?.(msg);
+    throw new Error(msg);
   }
   return data as T;
+}
+
+const FIELD_NAMES: Record<string, string> = { email: "Email", password: "Password", name: "Name", new_password: "New password", code: "Code" };
+
+/** A readable message from an API error. Validation errors (422) arrive as a list of problems. */
+function errorMessage(data: unknown, status: number): string {
+  const detail = data && typeof data === "object" && "detail" in data ? (data as any).detail : null;
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail) && detail.length) {
+    const first = detail[0] || {};
+    const field = Array.isArray(first.loc) ? String(first.loc[first.loc.length - 1]) : "";
+    let text = String(first.msg || "is invalid").replace(/^Value error, /, "");
+    if (field === "email") text = "isn't a valid email address";
+    return `${FIELD_NAMES[field] || "That value"} ${text.charAt(0).toLowerCase()}${text.slice(1)}`.replace(/\.$/, "") + ".";
+  }
+  return `Something went wrong (error ${status}). Please try again.`;
 }
 
 /** Called when the server reports the signed-in account is paused (HTTP 423). */

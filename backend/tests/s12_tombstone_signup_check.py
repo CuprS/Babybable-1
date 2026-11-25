@@ -4,8 +4,8 @@ import requests
 from motor.motor_asyncio import AsyncIOMotorClient
 from dotenv import load_dotenv
 
-load_dotenv("/app/backend/.env")
-API = os.environ["EXPO_BACKEND_URL"].rstrip("/") + "/api"
+load_dotenv(__import__("pathlib").Path(__file__).resolve().parents[1] / ".env")
+API = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("EXPO_BACKEND_URL") or "http://localhost:8001").rstrip("/") + "/api"
 
 
 def fp(email):

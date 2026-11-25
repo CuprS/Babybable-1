@@ -6,10 +6,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from starlette.concurrency import run_in_threadpool
 
-from core import (
-    APP_NAME, MAX_UPLOAD_BYTES, _get_object_sync, _put_object_sync, _user_from_token, current_user,
-    db, logger, now_iso, oauth2_scheme,
-)
+import storage
+from core import APP_NAME, MAX_UPLOAD_BYTES, _user_from_token, current_user, db, logger, now_iso, oauth2_scheme
 
 router = APIRouter()
 
@@ -37,7 +35,7 @@ async def upload(file: UploadFile = File(...), u: dict = Depends(current_user)):
         raise HTTPException(400, "The file is empty")
     ctype = UPLOAD_TYPES[ext]
     try:
-        await run_in_threadpool(_put_object_sync, path, data, ctype)
+        await run_in_threadpool(storage.put_object, path, data, ctype)
     except Exception as e:
         logger.exception("upload failed")
         raise HTTPException(502, f"Upload failed: {e}")
@@ -82,7 +80,9 @@ async def get_file(path: str, token: Optional[str] = Depends(oauth2_scheme)):
     elif level == "signed_in" and not caller:
         raise HTTPException(401, "Auth required to view accreditation documents")
     try:
-        content, ctype = await run_in_threadpool(_get_object_sync, path)
+        content, ctype = await run_in_threadpool(storage.get_object, path)
+    except storage.NotFound:
+        raise HTTPException(404, "File not found")
     except Exception as e:
         logger.exception("download failed")
         raise HTTPException(502, f"Download failed: {e}")

@@ -10,13 +10,12 @@ from datetime import datetime, timezone, timedelta
 import jwt
 import pytest
 import requests
-from dotenv import dotenv_values
-from pymongo import MongoClient
 
-BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or dotenv_values("/app/frontend/.env")["EXPO_PUBLIC_BACKEND_URL"]).rstrip("/")
-BENV = dotenv_values("/app/backend/.env")
-_mc = MongoClient(BENV["MONGO_URL"])
-DB = _mc[BENV["DB_NAME"]]
+from _support import backend_env, backend_url, mongo_db  # noqa: E402
+
+BASE_URL = backend_url()
+DB = mongo_db()
+BENV = backend_env()
 CREATED_USERS: list = []
 
 PNG_BYTES = (

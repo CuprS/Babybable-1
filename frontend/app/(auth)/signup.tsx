@@ -72,7 +72,7 @@ export default function Signup() {
           <View style={{ gap: theme.space.lg, marginTop: theme.space.xl }}>
             <Input testID="signup-name-input" label="Full name" value={name} onChangeText={setName} placeholder="Jane Doe" />
             <Input testID="signup-email-input" label="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} placeholder="you@example.com" />
-            <Input testID="signup-password-input" label="Password" secureTextEntry value={password} onChangeText={setPassword} placeholder="At least 6 characters" />
+            <Input testID="signup-password-input" label="Password" secureTextEntry value={password} onChangeText={setPassword} placeholder="At least 8 characters" />
             {error ? <Text testID="signup-error" style={styles.error}>{error}</Text> : null}
             <Button testID="signup-submit-button" title="Create account" onPress={submit} loading={loading} />
             <Pressable onPress={() => router.replace("/(auth)/login")} testID="signup-goto-login" style={{ alignItems: "center" }}>

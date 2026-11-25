@@ -2,7 +2,7 @@
 import json, uuid
 from datetime import datetime, timezone
 import sys
-sys.path.insert(0, "/app/backend/tests")
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))
 from test_babybabel_session10_privacy_spam import make_user, DB
 
 owner = make_user("parent", with_profile=True)

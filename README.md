@@ -15,6 +15,8 @@ teaching a new language. Product scope and feature history: `memory/PRD.md`.
 | `server.py` | Builds the app: CORS, routers, startup/shutdown |
 | `core.py` | Config, database, auth helpers, time zones, slot/overlap checks, notifications + push |
 | `models.py` | Request/response shapes |
+| `storage.py` | Uploaded files: a local folder or any S3-compatible bucket |
+| `email_service.py` | Outgoing email through Resend or SMTP, with a content safety check |
 | `booking_service.py` | Payment intents, cancellation and refund policy |
 | `workers.py` | Background jobs that run every minute (see below) |
 | `seed.py` | Indexes, sample data, migrations |
@@ -52,6 +54,29 @@ and purge W-9s past their retention date.
   upcoming sessions. Past bookings and reviews stay, without the name, for the other side's
   history and for accounting. W-9s are kept (still encrypted) for `W9_RETENTION_DAYS` (4 years),
   then purged.
+
+## File storage
+
+Profile photos, accreditation documents and ID checks are stored by `storage.py`:
+
+- `STORAGE_BACKEND=local` (default): files go in `backend/data/uploads` (or `STORAGE_DIR`).
+  This is simplest, but the server needs a persistent disk, and you have to back that folder up yourself.
+- `STORAGE_BACKEND=s3`: any S3-compatible bucket. Set `S3_BUCKET`, plus `S3_ENDPOINT_URL` for
+  non-AWS providers (Cloudflare R2, Backblaze B2, MinIO, DigitalOcean Spaces), and the
+  `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` for that bucket. Keep the bucket private: files
+  are always served through the API, which checks who may see them.
+
+## Email
+
+Safety alerts and verification / reset codes go out through `email_service.py`:
+
+- `EMAIL_PROVIDER=resend` with `RESEND_API_KEY`, or
+- `EMAIL_PROVIDER=smtp` with `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`
+  (Amazon SES, Postmark, Mailgun, Google Workspace…).
+
+Either way, set `EMAIL_FROM` to a sender your provider has verified, e.g. `Babybabel <hello@yourdomain.com>`.
+With no provider set, nothing is sent and the server logs a warning. For local development,
+`DEV_LOG_EMAIL_CODES=true` prints the 6-digit codes to the log instead.
 
 ## Push notifications
 
@@ -101,6 +126,10 @@ EXPO_PUBLIC_BACKEND_URL=http://localhost:8001 npx expo start
 | `backend/tests/` | a running server + its MongoDB | start the API with `SEED_TUTOR_PASSWORD=password123`, then `EXPO_PUBLIC_BACKEND_URL=http://localhost:8001 pytest tests` |
 | frontend | Node 20 | `cd frontend && yarn typecheck && yarn lint` |
 
+A few integration tests restart the API (to reload `.env` or clear rate limits). Set
+`BACKEND_RESTART_CMD` to whatever restarts your server (e.g. `docker compose restart api` or
+`systemctl restart babybabel`). Without it, those tests are skipped.
+
 The integration suites create and delete real accounts, so they refuse to run against anything
 but localhost unless you set `ALLOW_REMOTE_TESTS=1`.
 
@@ -115,5 +144,10 @@ workflow" → tick *integration*).
 - Leave `SEED_TUTOR_PASSWORD` empty. On a database created before this change, reset the
   passwords of `sofia@babybabel.dev` / `marie@babybabel.dev` (they used `password123`), or delete them.
 - Set `W9_ENCRYPTION_KEYS`; without it W-9 TINs are encrypted with a key that is lost on restart.
-- Set `ADMIN_EMAIL`, `PUBLIC_WEB_URL`, and the email keys (verification and reset codes are sent by email).
+- Set `ADMIN_EMAIL`, `PUBLIC_WEB_URL` (also allowed through CORS), and an email provider
+  (verification and reset codes are sent by email).
+- Choose file storage: `STORAGE_BACKEND=s3` with a private bucket, or `local` on a server whose
+  disk survives restarts and is backed up.
+- The app ids are `com.babybabel.app` (iOS and Android) and the link scheme is `babybabel://`.
+  Change them in `frontend/app.json` before your first store release if you want different ones.
 - The rate limiter is in memory per process: if you run several API workers, move it to Redis.

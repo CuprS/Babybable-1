@@ -11,7 +11,7 @@ Covers:
   P3       DELETE /api/auth/me purges ancillary collections
 
 Uses public BASE_URL from EXPO_PUBLIC_BACKEND_URL and the seeded admin/parent/
-tutor accounts documented in /app/memory/test_credentials.md.
+tutor accounts created by the seed (see README → Tests).
 """
 import io
 import os
@@ -219,16 +219,20 @@ class TestMockConfirmEnvGate:
         """Full-cycle: flip ENABLE_MOCK_CONFIRM=false in .env, restart backend, verify 410,
         then restore to true and verify a real confirm succeeds. The env gate runs
         BEFORE the DB booking lookup, so we can hit any booking id in phase A."""
-        env_path = "/app/backend/.env"
+        from _support import ENV_FILE, restart_backend
+        if not os.environ.get("BACKEND_RESTART_CMD"):
+            pytest.skip("needs BACKEND_RESTART_CMD (the same check runs in tests_inprocess)")
+        env_path = ENV_FILE
         with open(env_path) as f:
             original = f.read()
-        assert 'ENABLE_MOCK_CONFIRM="true"' in original, "expected ENABLE_MOCK_CONFIRM=true default in .env"
+        if not re.search(r'^ENABLE_MOCK_CONFIRM="?true"?', original, re.M):
+            pytest.skip("backend/.env must contain ENABLE_MOCK_CONFIRM=true for this test")
 
         # ---- Phase A: force false, expect 410 ----
-        modified = original.replace('ENABLE_MOCK_CONFIRM="true"', 'ENABLE_MOCK_CONFIRM="false"')
+        modified = re.sub(r'^ENABLE_MOCK_CONFIRM=.*$', 'ENABLE_MOCK_CONFIRM=false', original, flags=re.M)
         with open(env_path, "w") as f:
             f.write(modified)
-        os.system("sudo supervisorctl restart backend >/dev/null 2>&1 && sleep 10")
+        restart_backend()
 
         try:
             parent_tok = _token_for(PARENT_EMAIL, PARENT_PW)
@@ -259,7 +263,7 @@ class TestMockConfirmEnvGate:
             # ---- Restore for downstream tests + prod default ----
             with open(env_path, "w") as f:
                 f.write(original)
-            os.system("sudo supervisorctl restart backend >/dev/null 2>&1 && sleep 10")
+            restart_backend()
 
         # ---- Phase B: restored to true — verify a NEW booking can be flipped paid ----
         parent_tok = _token_for(PARENT_EMAIL, PARENT_PW)
@@ -504,7 +508,8 @@ class TestXFFRightmostIP:
         """
         # Restart backend to clear the in-memory rate buckets so this test is
         # order-independent.
-        os.system("sudo supervisorctl restart backend >/dev/null 2>&1 && sleep 10")
+        from _support import restart_backend
+        restart_backend()
 
         rightmost = "203.0.113.77"  # documentation-range, treated as trusted client IP
         codes = []
@@ -528,7 +533,8 @@ class TestXFFRightmostIP:
         """Sanity: with no XFF, limiter falls back to request.client.host so the
         API still works for a normal user coming from the ingress fallback."""
         # Restart to clear buckets so this test doesn't hit the rate limit
-        os.system("sudo supervisorctl restart backend >/dev/null 2>&1 && sleep 10")
+        from _support import restart_backend
+        restart_backend()
         r = requests.get(f"{BASE_URL}/api/tutors", timeout=30)
         assert r.status_code == 200
 
@@ -681,8 +687,8 @@ class TestDeleteAccountPurge:
 # =====================================================================
 class TestSourceGuards:
     def test_client_ip_uses_rightmost_xff(self):
-        with open("/app/backend/server.py") as f:
-            src = f.read()
+        from _support import backend_source
+        src = backend_source()
         # Match the _client_ip function body
         m = re.search(r"def _client_ip\(request: Request\).*?return[^\n]*\n\n", src, re.DOTALL)
         assert m, "could not locate _client_ip"
@@ -692,24 +698,26 @@ class TestSourceGuards:
         assert "parts[0]" not in body, "_client_ip still picks leftmost XFF"
 
     def test_confirm_mock_env_check_present(self):
-        with open("/app/backend/server.py") as f:
-            src = f.read()
+        from _support import backend_source
+        src = backend_source()
         assert 'ENABLE_MOCK_CONFIRM' in src
         assert re.search(r"os\.getenv\(\s*[\"']ENABLE_MOCK_CONFIRM", src), \
             "ENABLE_MOCK_CONFIRM not read via os.getenv"
 
     def test_search_uses_re_escape_and_truncation(self):
-        with open("/app/backend/server.py") as f:
-            src = f.read()
+        from _support import backend_source
+        src = backend_source()
         assert re.search(r"re\.escape\(.*?\)\[:\s*80\s*\]", src), \
             "search query is not re.escape'd + truncated"
 
     def test_delete_account_purges_all_collections(self):
-        with open("/app/backend/server.py") as f:
-            src = f.read()
+        from _support import backend_source
+        src = backend_source()
         # Find delete_account function body
-        m = re.search(r"async def delete_account\(.*?\n\n@", src, re.DOTALL)
+        m = re.search(r"async def delete_account\(.*?(?=\n\n\n|\n@|\Z)", src, re.DOTALL)
         assert m, "could not locate delete_account"
         body = m.group(0)
-        for coll in ("w9_forms", "notifications", "events", "favorites", "uploads"):
+        for coll in ("notifications", "events", "favorites", "uploads", "push_tokens"):
             assert f"db.{coll}.delete_many" in body, f"delete_account does not purge db.{coll}"
+        # W-9s are retained (IRS) and flagged for a later purge rather than deleted.
+        assert "db.w9_forms.update_many" in body and "retain_until" in body

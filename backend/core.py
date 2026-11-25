@@ -60,9 +60,6 @@ PENDING_PAYMENT_MINUTES = int(os.environ.get("PENDING_PAYMENT_MINUTES", "30"))
 # US payers must keep W-9s for 4 years after the last return they relate to.
 W9_RETENTION_DAYS = int(os.environ.get("W9_RETENTION_DAYS", str(4 * 365)))
 
-STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
-STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
-EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
@@ -79,55 +76,6 @@ def now_utc() -> datetime:
 
 def now_iso() -> str:
     return now_utc().isoformat()
-
-
-# ---- Storage (Emergent Managed Object Storage) ----
-_storage_key: Optional[str] = None
-
-
-def _init_storage_sync() -> str:
-    global _storage_key
-    if _storage_key:
-        return _storage_key
-    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY}, timeout=30)
-    resp.raise_for_status()
-    _storage_key = resp.json()["storage_key"]
-    return _storage_key
-
-
-def _put_object_sync(path: str, data: bytes, content_type: str) -> dict:
-    key = _init_storage_sync()
-    resp = requests.put(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data,
-        timeout=120,
-    )
-    resp.raise_for_status()
-    return resp.json()
-
-
-def _get_object_sync(path: str):
-    global _storage_key
-    key = _init_storage_sync()
-    resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
-    if resp.status_code == 503:
-        _storage_key = None
-        key = _init_storage_sync()
-        resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
-    resp.raise_for_status()
-    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
-
-
-def _delete_object_sync(path: str) -> bool:
-    """Best-effort delete. Returns False (never raises) if storage refuses or doesn't support it."""
-    try:
-        key = _init_storage_sync()
-        resp = requests.delete(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=30)
-        return resp.status_code < 400
-    except Exception as e:
-        logger.warning(f"storage delete failed for {path}: {e}")
-        return False
 
 
 # ---- Geocoding + distance ----

@@ -20,7 +20,7 @@ export default function Onboarding() {
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.header}>
           <View style={styles.brand}>
-            {/* Replace /app/frontend/assets/images/babybabel-icon.png with your own icon PNG (recommended 512×512). */}
+            {/* Replace frontend/assets/images/babybabel-icon.png with your own icon PNG (recommended 512×512). */}
             <Image source={require("../assets/images/babybabel-icon.png")} style={styles.icon} />
             <Text style={styles.logo}>Babybabel</Text>
           </View>

@@ -1,7 +1,7 @@
 # Concurrency probe: can a fresh tutor exceed the 10 cold-message/day cap with parallel requests?
 import sys
 from concurrent.futures import ThreadPoolExecutor
-sys.path.insert(0, "/app/backend/tests")
+sys.path.insert(0, str(__import__('pathlib').Path(__file__).resolve().parent))
 from test_babybabel_session10_privacy_spam import make_user, send, DB, CREATED_USERS
 
 t = make_user("tutor")

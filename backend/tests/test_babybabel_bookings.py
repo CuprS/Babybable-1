@@ -3,7 +3,6 @@ import random
 import os
 import time
 import uuid
-import subprocess
 import pytest
 import requests
 
@@ -43,7 +42,8 @@ class TestTutorSignupPersistence:
         assert data["user"]["role"] == "tutor"
 
         # Restart backend
-        subprocess.run(["sudo", "supervisorctl", "restart", "backend"], check=False, capture_output=True)
+        from _support import restart_backend
+        restart_backend()
         # Poll until backend up
         for _ in range(30):
             time.sleep(1)

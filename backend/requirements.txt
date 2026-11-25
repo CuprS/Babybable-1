@@ -13,6 +13,5 @@ requests>=2.31.0
 httpx==0.28.1
 stripe>=7.0.0
 tzdata>=2024.2
-# Emergent platform helpers (object storage / email proxy are called over HTTP, but the
-# platform image expects this package to be present).
-emergentintegrations==0.2.0
+# Only needed for STORAGE_BACKEND=s3 (imported lazily).
+boto3>=1.34

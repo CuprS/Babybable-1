@@ -2,7 +2,7 @@
 import json, os, sys, random
 import requests
 
-API = os.environ["EXPO_BACKEND_URL"].rstrip("/") + "/api"
+API = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("EXPO_BACKEND_URL") or "http://localhost:8001").rstrip("/") + "/api"
 r = requests.post(f"{API}/auth/login", headers={"X-Forwarded-For": "10.6.6.6"}, json={"email": "copperstone17@gmail.com", "password": "REDACTED-PASSWORD"})
 ah = {"Authorization": f"Bearer {r.json()['access_token']}"}
 for path in sys.argv[1:]:

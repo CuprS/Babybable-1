@@ -5,12 +5,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "frontend",
+    "scheme": "babybabel",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.papyrustutors.jb5ram",
+      "bundleIdentifier": "com.babybabel.app",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Upload your tutor and accreditation photos"
       }
@@ -21,7 +21,7 @@
         "backgroundColor": "#FAF8F5"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.papyrustutors.jb5ram",
+      "package": "com.babybabel.app",
       "permissions": ["READ_EXTERNAL_STORAGE"]
     },
     "web": {

@@ -7,9 +7,10 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
 
+import storage
 from booking_service import cancel_booking
 from core import (
-    SUSPENDED_MSG, W9_RETENTION_DAYS, _delete_object_sync, booking_start_utc, current_user,
+    SUSPENDED_MSG, W9_RETENTION_DAYS, booking_start_utc, current_user,
     current_user_even_if_paused, db, email_fingerprint, email_is_verified, hash_password, hash_secret,
     logger, make_token, new_code, now_iso, now_utc, rate_limit, tutor_profile_id, valid_timezone,
     verify_password,
@@ -288,7 +289,7 @@ async def delete_account(u: dict = Depends(current_user_even_if_paused)):
     paths = [d["path"] for d in await db.uploads.find({"owner_id": uid}, {"_id": 0, "path": 1}).to_list(5000)]
     failed = 0
     for p in paths:
-        if not await run_in_threadpool(_delete_object_sync, p):
+        if not await run_in_threadpool(storage.delete_object, p):
             failed += 1
     if failed:
         logger.warning(f"account {uid}: {failed}/{len(paths)} stored files could not be deleted from storage")

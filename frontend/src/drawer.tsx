@@ -70,7 +70,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
         <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
           <View style={styles.header}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              {/* Replace /app/frontend/assets/images/babybabel-icon.png with your own icon PNG. */}
+              {/* Replace frontend/assets/images/babybabel-icon.png with your own icon PNG. */}
               <Image source={require("../assets/images/babybabel-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
               <Text style={styles.logo}>Babybabel</Text>
             </View>

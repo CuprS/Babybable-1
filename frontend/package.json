@@ -1,9 +1,8 @@
 {
-  "name": "frontend",
+  "name": "babybabel",
   "main": "expo-router/entry",
   "version": "1.0.0",
   "scripts": {
-    "preinstall": "node ./scripts/cmd-guard.js --preinstall",
     "typecheck": "tsc --noEmit",
     "start": "expo start",
     "android": "expo start --android",

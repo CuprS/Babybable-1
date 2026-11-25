@@ -31,9 +31,9 @@ class TestSEC001AdminSeed:
         assert "access_token" in data
 
     def test_no_hardcoded_admin_password_literal(self):
-        """server.py should not contain any hash_password("...literal...") for admin."""
-        with open("/app/backend/server.py", "r") as f:
-            src = f.read()
+        """The backend should not contain any hash_password("...literal...") for admin."""
+        from _support import backend_source
+        src = backend_source()
         # Only allowed literal usages: hash_password(body.password), hash_password(admin_pw),
         # and hash_password("password123") for seed tutors. NO admin literal.
         import re

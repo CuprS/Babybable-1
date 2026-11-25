@@ -26,13 +26,9 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - name: Install
-        # emergentintegrations lives on Emergent's private index and isn't imported by the app.
-        run: |
-          grep -v '^emergentintegrations' requirements.txt > /tmp/requirements.txt
-          sed 's#-r requirements.txt#-r /tmp/requirements.txt#' requirements-dev.txt > /tmp/requirements-dev.txt
-          pip install -r /tmp/requirements-dev.txt
+        run: pip install -r requirements-dev.txt
       - name: Lint
-        run: flake8 --select=E9,F63,F7,F82,F401,F811,F841 core.py models.py booking_service.py workers.py seed.py server.py email_service.py routes tests_inprocess
+        run: flake8 --select=E9,F63,F7,F82,F401,F811,F841 core.py models.py storage.py booking_service.py workers.py seed.py server.py email_service.py routes tests_inprocess
       - name: In-process tests (no server or database needed)
         run: pytest tests_inprocess -n 2
 
@@ -67,10 +63,11 @@ jobs:
       DB_NAME: ci_integration
       JWT_SECRET: ci-only-secret-that-is-long-enough-1234567890
       SEED_TUTOR_PASSWORD: password123
-      ADMIN_EMAIL: admin@ci.test
+      ADMIN_EMAIL: admin@example.com
       ADMIN_INITIAL_PASSWORD: ci-admin-password
       EXPO_PUBLIC_BACKEND_URL: http://localhost:8001
       PUSH_ENABLED: "false"
+      STORAGE_DIR: /tmp/babybabel-uploads
     defaults:
       run:
         working-directory: backend
@@ -79,14 +76,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: |
-          grep -v '^emergentintegrations' requirements.txt > /tmp/requirements.txt
-          sed 's#-r requirements.txt#-r /tmp/requirements.txt#' requirements-dev.txt > /tmp/requirements-dev.txt
-          pip install -r /tmp/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
       - name: Start API
         run: |
           nohup uvicorn server:app --port 8001 > /tmp/api.log 2>&1 &
           for i in $(seq 1 30); do curl -sf http://localhost:8001/api/ && break; sleep 1; done
       - name: Integration tests
-        # Some suites need Emergent object storage/email; those fail without the platform keys.
+        # Uploads use local storage and email is off (EMAIL_PROVIDER unset), so no external services are needed.
         run: pytest tests -n 0 || (cat /tmp/api.log; exit 1)

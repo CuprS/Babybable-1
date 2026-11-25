@@ -2,7 +2,7 @@
 import json, os, random, uuid
 import requests
 
-API = os.environ["EXPO_BACKEND_URL"].rstrip("/") + "/api"
+API = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("EXPO_BACKEND_URL") or "http://localhost:8001").rstrip("/") + "/api"
 
 
 def ip():

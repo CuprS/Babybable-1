@@ -7,7 +7,7 @@ import random
 import pytest
 import requests
 
-BASE_URL = (os.environ.get("EXPO_BACKEND_URL") or os.environ["EXPO_PUBLIC_BACKEND_URL"]).rstrip("/")
+BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("EXPO_BACKEND_URL") or "http://localhost:8001").rstrip("/")
 API = f"{BASE_URL}/api"
 ADMIN = ("copperstone17@gmail.com", "REDACTED-PASSWORD")
 LOG = "/var/log/supervisor/backend.err.log"
@@ -336,6 +336,5 @@ class TestEvasionProbes:
 
 
 def _db():
-    from pymongo import MongoClient
-    env = dict(l.strip().split("=", 1) for l in open("/app/backend/.env") if "=" in l)
-    return MongoClient(env["MONGO_URL"].strip('"'))[env["DB_NAME"].strip('"')]
+    from _support import mongo_db
+    return mongo_db()

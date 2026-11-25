@@ -1,12 +1,10 @@
 # Session 12 retest: email_service.send_email retries on HTTP 429 with backoff (max 4 attempts), unit-level with mocked transport
 import asyncio
-import os
 import sys
 
 import httpx
-import pytest
 
-sys.path.insert(0, "/app/backend")
+sys.path.insert(0, str(__import__("pathlib").Path(__file__).resolve().parents[1]))
 import email_service  # noqa: E402
 
 
@@ -23,8 +21,9 @@ def _run(responses, monkeypatch):
     async def fake_sleep(s):
         sleeps.append(s)
     monkeypatch.setattr(email_service.asyncio, "sleep", fake_sleep)
-    monkeypatch.setenv("EMERGENT_EMAIL_KEY", "k")
-    monkeypatch.setenv("EMAIL_FROM_NAME", "Babybabel")
+    monkeypatch.setenv("EMAIL_PROVIDER", "resend")
+    monkeypatch.setenv("RESEND_API_KEY", "re_test_key")
+    monkeypatch.setenv("EMAIL_FROM", "Babybabel <alerts@example.com>")
     res = asyncio.run(email_service.send_email(to="delivered@resend.dev", subject="TEST_ s", html="<p>x</p>"))
     return res, calls, sleeps
 
@@ -52,3 +51,43 @@ def test_honours_retry_after(monkeypatch):
 def test_no_retry_on_500(monkeypatch):
     res, calls, _ = _run([httpx.Response(500, json={})], monkeypatch)
     assert res is None and len(calls) == 1
+
+
+def test_sends_to_resend_with_bearer_key(monkeypatch):
+    res, calls, _ = _run([OK], monkeypatch)
+    req = calls[0]
+    assert str(req.url) == "https://api.resend.com/emails"
+    assert req.headers["Authorization"] == "Bearer re_test_key"
+    body = req.read().decode()
+    assert '"from":"Babybabel <alerts@example.com>"' in body.replace(": ", ":") and '"text"' in body
+
+
+def test_nothing_sent_without_provider(monkeypatch):
+    monkeypatch.delenv("EMAIL_PROVIDER", raising=False)
+    assert asyncio.run(email_service.send_email(to="a@example.com", subject="s", html="<p>x</p>")) is None
+
+
+def test_smtp_provider(monkeypatch):
+    sent = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None):
+            sent["addr"] = (host, port)
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def starttls(self, context=None):
+            sent["tls"] = True
+        def login(self, u, p):
+            sent["login"] = u
+        def send_message(self, msg):
+            sent["msg"] = msg
+
+    monkeypatch.setattr(email_service.smtplib, "SMTP", FakeSMTP)
+    for k, v in {"EMAIL_PROVIDER": "smtp", "SMTP_HOST": "smtp.example.com", "SMTP_USERNAME": "u",
+                 "SMTP_PASSWORD": "p", "EMAIL_FROM": "Babybabel <hello@example.com>"}.items():
+        monkeypatch.setenv(k, v)
+    res = asyncio.run(email_service.send_email(to="a@example.com", subject="Hi", html="<p>Hello</p>"))
+    assert res and sent["addr"] == ("smtp.example.com", 587) and sent["tls"] and sent["login"] == "u"
+    assert sent["msg"]["To"] == "a@example.com" and sent["msg"].get_body(("plain",)).get_content().strip() == "Hello"

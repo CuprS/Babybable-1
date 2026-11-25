@@ -4,9 +4,13 @@ from datetime import datetime, timedelta, timezone
 
 import core
 import workers
-from conftest import H
 
-FUTURE = (datetime.now(timezone.utc) + timedelta(days=7)).date().isoformat()
+
+def H(tok: str) -> dict:
+    return {"Authorization": f"Bearer {tok}"}
+
+
+FUTURE =(datetime.now(timezone.utc) + timedelta(days=7)).date().isoformat()
 FAR = (datetime.now(timezone.utc) + timedelta(days=10)).date().isoformat()
 PAST = (datetime.now(timezone.utc) - timedelta(days=10)).date().isoformat()
 
@@ -284,3 +288,33 @@ def test_share_pages_and_sitemap(client, sofia):
     assert client.get(f"/api/share/blog/{posts[0]['id']}").status_code == 200
     sm = client.get("/api/seo/sitemap.xml")
     assert sm.status_code == 200 and "<urlset" in sm.text and "/api/share/tutor/" in sm.text
+
+
+# ---- File storage (local folder backend) ----
+def test_upload_round_trip_and_private_files(client, make_user):
+    u = make_user()
+    up = client.post("/api/uploads", headers=u["h"], files={"file": ("a.png", b"\x89PNG-bytes", "image/png")}).json()
+    r = client.get(up["url"])
+    assert r.status_code == 200 and r.content == b"\x89PNG-bytes" and r.headers["content-type"] == "image/png"
+    assert r.headers["x-content-type-options"] == "nosniff"
+    assert client.get("/api/files/babybabel/uploads/nobody/missing.png").status_code == 404
+
+
+def test_storage_rejects_path_tricks():
+    import pytest
+    import storage
+    for bad in ("../secret.txt", "/etc/passwd", "a/../../b", "a\\..\\b", ""):
+        with pytest.raises(storage.StorageError):
+            storage.put_object(bad, b"x", "text/plain")
+    storage.put_object("babybabel/uploads/t/ok.txt", b"hello", "text/plain; charset=utf-8")
+    assert storage.get_object("babybabel/uploads/t/ok.txt") == (b"hello", "text/plain; charset=utf-8")
+    assert storage.delete_object("babybabel/uploads/t/ok.txt") is True
+    with pytest.raises(storage.NotFound):
+        storage.get_object("babybabel/uploads/t/ok.txt")
+
+
+def test_mock_confirm_can_be_switched_off(client, make_user, sofia, monkeypatch):
+    parent = make_user()
+    r = book(client, parent, sofia["profile"]["id"], date=(datetime.now(timezone.utc) + timedelta(days=13)).date().isoformat(), time="10:00")
+    monkeypatch.setenv("ENABLE_MOCK_CONFIRM", "false")
+    assert client.post(f"/api/bookings/{r.json()['id']}/confirm-mock", headers=parent["h"]).status_code == 410

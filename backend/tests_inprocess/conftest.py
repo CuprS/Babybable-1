@@ -4,6 +4,7 @@ No server, network or real database needed:  pytest tests_inprocess -n 0
 """
 import os
 import sys
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -15,7 +16,9 @@ os.environ.update({
     "MONGO_URL": "mongodb://in-memory", "DB_NAME": f"test_{uuid.uuid4().hex[:8]}",
     "JWT_SECRET": "t" * 48, "SEED_TUTOR_PASSWORD": "password123",
     "DISABLE_BACKGROUND_WORKERS": "true", "PUSH_ENABLED": "false", "ENABLE_MOCK_CONFIRM": "true",
-    "STRIPE_API_KEY": "", "EMERGENT_LLM_KEY": "",
+    "STRIPE_API_KEY": "", "EMAIL_PROVIDER": "",
+    # Real local-folder storage in a throwaway directory.
+    "STORAGE_BACKEND": "local", "STORAGE_DIR": tempfile.mkdtemp(prefix="babybabel-test-uploads-"),
 })
 
 import motor.motor_asyncio  # noqa: E402
@@ -25,12 +28,8 @@ motor.motor_asyncio.AsyncIOMotorClient = AsyncMongoMockClient
 
 import core  # noqa: E402
 import server  # noqa: E402
-from routes import auth as auth_routes, uploads as upload_routes  # noqa: E402
+from routes import auth as auth_routes  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
-
-upload_routes._put_object_sync = lambda path, data, ctype: {"ok": True}  # no network
-core._delete_object_sync = lambda path: True
-auth_routes._delete_object_sync = lambda path: True
 
 SENT_CODES: dict = {}
 
