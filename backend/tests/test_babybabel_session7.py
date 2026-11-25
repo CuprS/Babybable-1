@@ -40,7 +40,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 BASE = os.environ.get(
-    "EXPO_PUBLIC_BACKEND_URL", "https://papyrus-tutors.preview.emergentagent.com"
+    "EXPO_PUBLIC_BACKEND_URL", "http://localhost:8001"
 ).rstrip("/")
 _mongo = pymongo.MongoClient(os.environ["MONGO_URL"])
 _db = _mongo[os.environ["DB_NAME"]]

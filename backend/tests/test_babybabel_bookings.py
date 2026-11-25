@@ -7,7 +7,7 @@ import subprocess
 import pytest
 import requests
 
-BASE = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "https://papyrus-tutors.preview.emergentagent.com").rstrip("/")
+BASE = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "http://localhost:8001").rstrip("/")
 API = f"{BASE}/api"
 
 ADMIN_EMAIL = "copperstone17@gmail.com"

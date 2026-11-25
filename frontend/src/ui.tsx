@@ -1,5 +1,5 @@
 import React from "react";
-import { Pressable, Text, StyleSheet, View, ViewStyle, TextStyle, ActivityIndicator, TextInput, TextInputProps } from "react-native";
+import { Pressable, Text, StyleSheet, View, ViewStyle, ActivityIndicator, TextInput, TextInputProps } from "react-native";
 import { theme } from "./theme";
 
 interface BtnProps {
@@ -22,6 +22,9 @@ export function Button({ title, onPress, variant = "primary", loading, disabled,
       testID={testID}
       onPress={onPress}
       disabled={disabled || loading}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       style={({ pressed }) => [
         styles.btn,
         { backgroundColor: bg, borderColor: border, borderWidth: variant === "ghost" ? 1 : 0, opacity: pressed || disabled ? 0.85 : 1 },
@@ -35,7 +38,7 @@ export function Button({ title, onPress, variant = "primary", loading, disabled,
 
 const styles = StyleSheet.create({
   btn: {
-    height: 52,
+    minHeight: 52,
     borderRadius: theme.radius.pill,
     alignItems: "center",
     justifyContent: "center",
@@ -57,6 +60,7 @@ export function Input({ label, style, testID, ...rest }: InputProps) {
       {label ? <Text style={inputStyles.label}>{label}</Text> : null}
       <TextInput
         testID={testID}
+        accessibilityLabel={label}
         placeholderTextColor={theme.color.muted}
         style={[inputStyles.input, style]}
         {...rest}
@@ -79,7 +83,7 @@ const inputStyles = StyleSheet.create({
 });
 
 export function Divider() {
-  return <View style={{ height: 1, backgroundColor: theme.color.divider ?? theme.color.border, marginVertical: theme.space.md }} />;
+  return <View style={{ height: 1, backgroundColor: theme.color.border, marginVertical: theme.space.md }} />;
 }
 
 export function Chip({ label, selected, onPress, testID }: { label: string; selected?: boolean; onPress: () => void; testID?: string }) {
@@ -87,8 +91,11 @@ export function Chip({ label, selected, onPress, testID }: { label: string; sele
     <Pressable
       testID={testID}
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!selected }}
+      hitSlop={6}
       style={{
-        height: 36,
+        minHeight: 40,
         flexShrink: 0,
         paddingHorizontal: theme.space.lg,
         borderRadius: theme.radius.pill,
@@ -103,5 +110,22 @@ export function Chip({ label, selected, onPress, testID }: { label: string; sele
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+/** Shown next to tutors whose identity and background check an admin approved. */
+export function VerifiedBadge({ large }: { large?: boolean }) {
+  return (
+    <View
+      accessible
+      accessibilityLabel="Verified: identity and background check approved"
+      style={{
+        flexDirection: "row", alignItems: "center", gap: 3,
+        paddingHorizontal: large ? 10 : 6, paddingVertical: large ? 4 : 2,
+        borderRadius: theme.radius.pill, backgroundColor: theme.color.success,
+      }}
+    >
+      <Text style={{ color: "#fff", fontWeight: "700", fontSize: large ? theme.font.base : theme.font.sm }}>✔ Verified</Text>
+    </View>
   );
 }

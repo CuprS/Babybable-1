@@ -58,6 +58,24 @@ export interface UserPublic {
   role: Role;
   avatar_url?: string | null;
   is_admin?: boolean;
+  email_verified?: boolean;
+  timezone?: string | null;
+}
+
+/** The device's IANA time zone, e.g. "Europe/Madrid". */
+export function deviceTimeZone(): string | undefined {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch { return undefined; }
+}
+
+/** "Europe/Madrid" → "Madrid time". */
+export function zoneLabel(tz?: string | null): string {
+  if (!tz) return "UTC";
+  const city = tz.split("/").pop() || tz;
+  return `${city.replace(/_/g, " ")} time`;
+}
+
+export function money(cents: number, digits = 2): string {
+  return `$${(cents / 100).toFixed(digits)}`;
 }
 
 export interface TutorLocation { name: string; latitude?: number | null; longitude?: number | null }
@@ -83,8 +101,20 @@ export interface Tutor {
   accreditation_document_url?: string | null;
   hero_image_url?: string | null;
   is_new?: boolean;
+  verified?: boolean;
+  timezone?: string | null;
   weekly_availability?: { [day: string]: string[] };
   distance_miles?: number | null;
+}
+
+export type VerificationStatus = "none" | "pending" | "verified" | "rejected";
+export interface MyVerification {
+  status: VerificationStatus;
+  note: string;
+  submitted_at?: string | null;
+  verified_at?: string | null;
+  has_id_document: boolean;
+  has_background_check: boolean;
 }
 
 export interface Booking {
@@ -108,6 +138,23 @@ export interface Booking {
   remote?: boolean;
   housing_offered?: string;
   created_at: string;
+  timezone?: string | null;
+  tutor_response?: "pending" | "accepted" | "declined";
+  respond_by?: string | null;
+  canceled_by?: string | null;
+  cancel_reason?: string | null;
+  refund_status?: "none" | "refunded" | "not_refunded" | "failed" | null;
+  refund_cents?: number;
+  reschedule_count?: number;
+}
+
+/** One short human label for where a booking stands. */
+export function bookingStatus(b: Booking): { label: string; tone: "success" | "warning" | "error" | "muted" } {
+  if (b.payment_status === "canceled") return { label: "Cancelled", tone: "muted" };
+  if (b.payment_status === "failed") return { label: "Payment failed", tone: "error" };
+  if (b.payment_status !== "paid") return { label: "Awaiting payment", tone: "warning" };
+  if (b.tutor_response === "pending") return { label: "Awaiting tutor", tone: "warning" };
+  return { label: "Confirmed", tone: "success" };
 }
 
 export interface Review {

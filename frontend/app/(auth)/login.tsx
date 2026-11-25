@@ -29,7 +29,7 @@ export default function Login() {
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <View style={styles.header}>
-          <Pressable testID="login-back" onPress={() => router.back()} hitSlop={12}>
+          <Pressable testID="login-back" accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} hitSlop={12}>
             <Feather name="arrow-left" size={24} color={theme.color.onSurface} />
           </Pressable>
         </View>
@@ -41,6 +41,14 @@ export default function Login() {
             <Input testID="login-password-input" label="Password" secureTextEntry value={password} onChangeText={setPassword} placeholder="Your password" />
             {error ? <Text testID="login-error" style={styles.error}>{error}</Text> : null}
             <Button testID="login-submit-button" title="Log in" onPress={submit} loading={loading} />
+            <Pressable
+              onPress={() => router.push({ pathname: "/(auth)/forgot-password", params: { email: email.trim() } })}
+              testID="login-forgot"
+              accessibilityRole="button"
+              style={{ alignItems: "center", paddingVertical: theme.space.xs }}
+            >
+              <Text style={{ color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.base }}>Forgot password?</Text>
+            </Pressable>
             <Pressable onPress={() => router.replace("/onboarding")} testID="login-goto-signup" style={{ alignItems: "center" }}>
               <Text style={styles.link}>New here? <Text style={{ fontWeight: "700", color: theme.color.brand }}>Create an account</Text></Text>
             </Pressable>

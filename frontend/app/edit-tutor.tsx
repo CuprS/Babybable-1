@@ -6,9 +6,9 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
-import { apiFetch, apiUpload, fileUrl, Tutor } from "@/src/api";
+import { apiFetch, apiUpload, deviceTimeZone, fileUrl, Tutor, zoneLabel } from "@/src/api";
 import { theme } from "@/src/theme";
-import { Button, Input } from "@/src/ui";
+import { Button, Input, VerifiedBadge } from "@/src/ui";
 import { useToast } from "@/src/toast";
 import { AvailabilityGrid } from "@/src/AvailabilityGrid";
 import { WeeklyAvailability } from "@/src/availability";
@@ -25,6 +25,7 @@ export default function EditTutor() {
   const [langs, setLangs] = useState<string[]>([]);
   const [langInput, setLangInput] = useState("");
   const [availability, setAvailability] = useState<WeeklyAvailability>({});
+  const [timezone, setTimezone] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -38,6 +39,7 @@ export default function EditTutor() {
       setRate(String(Math.round(t.hourly_rate_cents / 100)));
       setLangs(t.languages);
       setAvailability((t.weekly_availability as WeeklyAvailability) || {});
+      setTimezone(t.timezone || deviceTimeZone() || "");
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -112,6 +114,7 @@ export default function EditTutor() {
           locations,
           allows_remote: !!tutor?.allows_remote,
           weekly_availability: availability,
+          ...(timezone.trim() ? { timezone: timezone.trim() } : {}),
         }),
       });
       setTutor(updated);
@@ -125,7 +128,7 @@ export default function EditTutor() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} testID="edit-back"><Feather name="arrow-left" size={24} color={theme.color.onSurface} /></Pressable>
+        <Pressable onPress={() => router.back()} testID="edit-back" accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={24} color={theme.color.onSurface} /></Pressable>
         <Text style={styles.title}>Edit profile</Text>
         <View style={{ width: 24 }} />
       </View>
@@ -207,6 +210,29 @@ export default function EditTutor() {
           <View style={{ flex: 1 }}><Input value={langInput} onChangeText={setLangInput} placeholder="Add a language" testID="edit-lang-input" onSubmitEditing={addLang} /></View>
           <Pressable onPress={addLang} style={styles.addBtn} testID="edit-lang-add"><Feather name="plus" size={20} color="#fff" /></Pressable>
         </View>
+
+        <Text style={styles.section}>Time zone</Text>
+        <Text style={styles.hintText}>Your availability and every booking time are in this zone. Families elsewhere see it labelled.</Text>
+        <View style={{ flexDirection: "row", gap: theme.space.sm, alignItems: "flex-end" }}>
+          <View style={{ flex: 1 }}>
+            <Input value={timezone} onChangeText={setTimezone} autoCapitalize="none" placeholder="e.g. Europe/Madrid" testID="edit-timezone"
+              accessibilityHint={`Currently ${zoneLabel(timezone)}`} />
+          </View>
+          {!!deviceTimeZone() && deviceTimeZone() !== timezone && (
+            <Pressable onPress={() => setTimezone(deviceTimeZone() || "")} style={styles.tzBtn} testID="edit-timezone-device" accessibilityRole="button">
+              <Text style={styles.tzBtnText}>Use {zoneLabel(deviceTimeZone())}</Text>
+            </Pressable>
+          )}
+        </View>
+
+        <Pressable onPress={() => router.push("/verify-tutor")} style={styles.toggleRow} testID="edit-verification" accessibilityRole="button">
+          <Feather name="shield" size={20} color={theme.color.onSurface} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.toggleTitle}>Identity &amp; background check</Text>
+            <Text style={styles.toggleSub}>Verified tutors get a badge families can filter by.</Text>
+          </View>
+          {tutor?.verified ? <VerifiedBadge /> : <Feather name="chevron-right" size={20} color={theme.color.muted} />}
+        </Pressable>
 
         <Text style={styles.section}>Weekly availability</Text>
         <Text style={styles.hintText}>Parents will only see these hours when booking. Leave a day off entirely if you&apos;re not available.</Text>
@@ -295,9 +321,11 @@ const styles = StyleSheet.create({
   accredDocFilled: { alignItems: "center", justifyContent: "center", gap: 8, padding: theme.space.md },
   emptyLabel: { color: theme.color.muted, fontSize: theme.font.sm, textAlign: "center", paddingHorizontal: theme.space.sm },
   accredLabel: { position: "absolute", left: 8, bottom: 8, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "rgba(44,36,33,0.85)", paddingHorizontal: 8, paddingVertical: 4, borderRadius: theme.radius.pill },
-  accredLabelText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  accredLabelText: { color: "#fff", fontSize: 12, fontWeight: "700" },
   removeBadge: { position: "absolute", top: 6, right: 6, width: 26, height: 26, borderRadius: 13, backgroundColor: theme.color.error, alignItems: "center", justifyContent: "center" },
   docFilename: { color: theme.color.onSurface, fontWeight: "600", textAlign: "center", fontSize: theme.font.sm },
   docBtnSmall: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.radius.pill, backgroundColor: theme.color.brand },
   docBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+  tzBtn: { minHeight: 52, paddingHorizontal: theme.space.md, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.color.brand, alignItems: "center", justifyContent: "center" },
+  tzBtnText: { color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.sm },
 });

@@ -49,7 +49,7 @@ export default function Profile() {
   const confirmDelete = () => {
     Alert.alert(
       "Delete account?",
-      "This permanently deletes your account, bookings, messages, and uploaded photos. This cannot be undone.",
+      "This permanently deletes your account, messages and photos, and cancels your upcoming sessions (normal refund rules apply). Records of past sessions are kept without your name, for accounting. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -91,6 +91,23 @@ export default function Profile() {
           <Text style={styles.hint}>Tap the photo to update your profile picture</Text>
         </View>
 
+        {user.email_verified === false && (
+          <Pressable testID="profile-verify-email" onPress={() => router.push("/verify-email")} style={styles.notice} accessibilityRole="button">
+            <Feather name="mail" size={20} color={theme.color.brandDark} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.noticeTitle}>Confirm your email</Text>
+              <Text style={styles.noticeBody}>We sent you a 6-digit code. It keeps your account recoverable.</Text>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.color.brandDark} />
+          </Pressable>
+        )}
+        {user.role === "tutor" && (
+          <Pressable testID="profile-verify-tutor" onPress={() => router.push("/verify-tutor")} style={styles.row} accessibilityRole="button">
+            <Feather name="shield" size={20} color={theme.color.onSurface} />
+            <Text style={styles.rowText}>Identity &amp; background check</Text>
+            <Feather name="chevron-right" size={20} color={theme.color.muted} />
+          </Pressable>
+        )}
         {(user.role === "tutor" || user.role === "parent") && (
           <Pressable
             testID="profile-view-public-btn"
@@ -175,4 +192,7 @@ const styles = StyleSheet.create({
   deleteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.space.sm, marginTop: theme.space.lg, paddingVertical: theme.space.md },
   deleteText: { color: theme.color.error, fontWeight: "700", fontSize: theme.font.base },
   tag: { textAlign: "center", color: theme.color.muted, marginTop: theme.space["2xl"] },
+  notice: { flexDirection: "row", alignItems: "center", gap: theme.space.md, padding: theme.space.lg, borderRadius: theme.radius.lg, backgroundColor: theme.color.brandSoft, marginBottom: theme.space.md },
+  noticeTitle: { color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.lg },
+  noticeBody: { color: theme.color.brandDark, fontSize: theme.font.base, marginTop: 2 },
 });

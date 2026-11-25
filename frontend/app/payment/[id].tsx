@@ -42,7 +42,7 @@ export default function Payment() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} testID="payment-back" hitSlop={12}>
+        <Pressable onPress={() => router.back()} testID="payment-back" accessibilityRole="button" accessibilityLabel="Go back" hitSlop={12}>
           <Feather name="arrow-left" size={22} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>Payment</Text>
@@ -86,8 +86,8 @@ export default function Payment() {
         </View>
 
         <Text style={styles.smallprint}>
-          By tapping "Pay", you agree to Babybabel's terms and confirm the session details above. In MVP the payment is
-          mocked — no card is charged; the booking simply flips to "paid".
+          By tapping &quot;Pay&quot;, you agree to Babybabel&apos;s terms and confirm the session details above. In MVP the payment is
+          mocked — no card is charged; the booking simply flips to &quot;paid&quot;.
         </Text>
       </ScrollView>
 
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.xl, paddingVertical: theme.space.md, borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface },
   receipt: { padding: theme.space.xl, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg },
-  eyebrow: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 11 },
+  eyebrow: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 12 },
   title: { fontSize: 26, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space.xs, letterSpacing: -0.5 },
   sub: { color: theme.color.onSurfaceSecondary, marginTop: 4 },
   divider: { height: 1, backgroundColor: theme.color.border, marginVertical: theme.space.lg },

@@ -6,7 +6,7 @@ import uuid
 import pytest
 import requests
 
-BASE = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "https://papyrus-tutors.preview.emergentagent.com").rstrip("/")
+BASE = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "http://localhost:8001").rstrip("/")
 API = f"{BASE}/api"
 EDITORIAL_IDS = {"raising-bilingual", "why-mandarin-now", "meet-marie", "small-languages"}
 BODY = "This is a TEST article body that is long enough to pass the 40 char minimum."

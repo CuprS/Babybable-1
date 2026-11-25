@@ -40,7 +40,13 @@
           "backgroundColor": "#000000"
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "color": "#ED6249"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

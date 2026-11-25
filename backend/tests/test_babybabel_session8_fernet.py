@@ -47,7 +47,7 @@ def _run_on_persistent_loop(coro_factory):
 
 
 BASE = os.environ.get(
-    "EXPO_PUBLIC_BACKEND_URL", "https://papyrus-tutors.preview.emergentagent.com"
+    "EXPO_PUBLIC_BACKEND_URL", "http://localhost:8001"
 ).rstrip("/")
 
 _mongo = pymongo.MongoClient(os.environ["MONGO_URL"])

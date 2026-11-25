@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 from cryptography.fernet import InvalidToken
 
-import server
-from server import db, current_user, require_admin, encrypt_tin, tutor_has_completed_session
+import core
+from core import db, current_user, require_admin, encrypt_tin, tutor_has_completed_session
 
 router = APIRouter()
 
@@ -176,13 +176,13 @@ async def admin_w9_encryption_status(u: dict = Depends(require_admin)):
     async for doc in db.w9_forms.find({}, {"_id": 0, "tin_encrypted": 1}):
         token = (doc or {}).get("tin_encrypted") or ""
         try:
-            server._fernets[0].decrypt(token.encode())
+            core._fernets[0].decrypt(token.encode())
             primary += 1
         except InvalidToken:
             legacy += 1
     return {
-        "keys_configured": len(server._fernets),
-        "ephemeral_key": server._EPHEMERAL_W9_KEY,
+        "keys_configured": len(core._fernets),
+        "ephemeral_key": core._EPHEMERAL_W9_KEY,
         "records_total": total,
         "records_on_primary_key": primary,
         "records_needing_rotation": legacy,

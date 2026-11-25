@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /chat/
+Disallow: /booking/
+Disallow: /booking-detail/
+Disallow: /payment/
+
+# Crawlable tutor and blog pages are served by the API at /api/share/... and listed in
+# /api/seo/sitemap.xml — submit that URL in Google Search Console / Bing Webmaster Tools.

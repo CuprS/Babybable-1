@@ -10,7 +10,7 @@ import pytest
 import requests
 
 
-BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "https://papyrus-tutors.preview.emergentagent.com").rstrip("/")
+BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "http://localhost:8001").rstrip("/")
 ADMIN_EMAIL = "copperstone17@gmail.com"
 ADMIN_PW = os.environ.get("ADMIN_INITIAL_PASSWORD", "REDACTED-PASSWORD")
 

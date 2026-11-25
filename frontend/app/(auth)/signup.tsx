@@ -7,6 +7,7 @@ import { Button, Input } from "@/src/ui";
 import { theme } from "@/src/theme";
 import { useAuth } from "@/src/auth";
 import type { Role } from "@/src/api";
+import { track } from "@/src/analytics";
 
 export default function Signup() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function Signup() {
   const submit = async () => {
     setLoading(true); setError("");
     try {
-      if (password.length < 6) throw new Error("Password must be at least 6 characters");
+      if (password.length < 8) throw new Error("Password must be at least 8 characters");
       if (name.trim().length < 2) throw new Error("Please enter your name");
       await signUp(email.trim(), password, name.trim(), role);
       track("signup", { role, method: "email", source: "client" });
@@ -37,7 +38,7 @@ export default function Signup() {
     <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <View style={styles.header}>
-          <Pressable testID="signup-back" onPress={() => router.back()} hitSlop={12}>
+          <Pressable testID="signup-back" accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} hitSlop={12}>
             <Feather name="arrow-left" size={24} color={theme.color.onSurface} />
           </Pressable>
         </View>

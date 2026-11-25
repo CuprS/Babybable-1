@@ -100,7 +100,7 @@ export default function Chat() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} testID="chat-back" hitSlop={12}>
+        <Pressable onPress={() => router.back()} testID="chat-back" accessibilityRole="button" accessibilityLabel="Go back" hitSlop={12}>
           <Feather name="arrow-left" size={24} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.name} numberOfLines={1}>{name || "Chat"}</Text>
@@ -363,7 +363,7 @@ const invSlotStyles = StyleSheet.create({
   text: { color: theme.color.onSurface, fontWeight: "600", fontSize: theme.font.base },
   textOn: { color: theme.color.onBrand },
   textDisabled: { color: theme.color.muted, textDecorationLine: "line-through" },
-  tag: { color: theme.color.muted, fontSize: 10, marginTop: 1 },
+  tag: { color: theme.color.muted, fontSize: 12, marginTop: 1 },
 });
 
 const styles = StyleSheet.create({
@@ -393,7 +393,7 @@ const cardStyles = StyleSheet.create({
   meta: { color: theme.color.onSurfaceSecondary },
   note: { color: theme.color.onSurface, marginTop: 4, fontStyle: "italic" },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.radius.pill },
-  badgeText: { color: "#fff", fontWeight: "700", fontSize: 11, textTransform: "capitalize" },
+  badgeText: { color: "#fff", fontWeight: "700", fontSize: 12, textTransform: "capitalize" },
   actions: { flexDirection: "row", gap: theme.space.sm, marginTop: theme.space.md },
   action: { flex: 1, height: 44, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center" },
   actionGhost: { borderWidth: 1, borderColor: theme.color.borderStrong },

@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Dimensions } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Dimensions, Linking } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Linking } from "react-native";
 import { apiFetch, fileUrl, Tutor, Review } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
 import { flagFor } from "@/src/flags";
-import { track } from "@/src/analytics";
 import { StaticMap, MapMarker } from "@/src/staticmap";
+import { VerifiedBadge } from "@/src/ui";
+import Head from "expo-router/head";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -49,7 +49,7 @@ export default function TutorDetail() {
     return (
       <SafeAreaView style={styles.center}>
         <Text style={{ color: theme.color.onSurfaceSecondary, marginBottom: theme.space.lg }}>Tutor not found</Text>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="tutor-notfound-back">
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="tutor-notfound-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Text style={{ color: theme.color.brandDark, fontWeight: "700", textDecorationLine: "underline" }}>Go back</Text>
         </Pressable>
       </SafeAreaView>
@@ -58,6 +58,10 @@ export default function TutorDetail() {
 
   return (
     <View style={styles.root} testID="tutor-detail-screen">
+      <Head>
+        <title>{`${tutor.name} — ${tutor.languages.join(", ") || "Language"} tutor | Babybabel`}</title>
+        <meta name="description" content={(tutor.bio || `${tutor.name} teaches children while caring for them.`).slice(0, 160)} />
+      </Head>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 160 }} showsVerticalScrollIndicator={false}>
         <View style={styles.heroWrap}>
           <Image source={{ uri: fileUrl(tutor.hero_image_url || tutor.avatar_url) }} style={styles.hero} contentFit="cover" />
@@ -65,7 +69,8 @@ export default function TutorDetail() {
         </View>
 
         <View style={styles.body}>
-          <Text style={styles.name}>{tutor.name}</Text>
+          <Text style={styles.name} accessibilityRole="header">{tutor.name}</Text>
+          {tutor.verified && <View style={{ alignSelf: "flex-start", marginTop: 6 }}><VerifiedBadge large /></View>}
           <Text style={styles.location}>{(tutor.locations && tutor.locations.length ? tutor.locations.map((l) => l.name).join(" · ") : tutor.location) || "Location coming soon"}</Text>
 
           <View style={styles.stats}>
@@ -93,7 +98,7 @@ export default function TutorDetail() {
             </View>
           )}
 
-          <Text style={styles.section}>Where I'm based</Text>
+          <Text style={styles.section}>Where I&apos;m based</Text>
           <StaticMap
             latitude={tutor.latitude}
             longitude={tutor.longitude}

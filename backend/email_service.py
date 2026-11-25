@@ -89,7 +89,8 @@ def _assert_safe_email(subject: str, html: str) -> None:
 
 async def send_email(*, to: str, subject: str, html: str) -> str | None:
     """Fire-and-forget internal send. Recipients/templates are server-side only (G4).
-    Never raises — alerts must not break the user action that triggered them."""
+    Network/provider errors never raise (returns None). Raises ValueError only when the
+    content fails the safety guardrail, so callers can fall back to a safer template."""
     _assert_safe_email(subject, html)
     key = os.environ.get("EMERGENT_EMAIL_KEY")
     from_name = os.environ.get("EMAIL_FROM_NAME")

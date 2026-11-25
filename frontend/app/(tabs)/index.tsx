@@ -6,10 +6,10 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import Slider from "@react-native-community/slider";
-import { apiFetch, fileUrl, Tutor } from "@/src/api";
+import { apiFetch, Booking, fileUrl, Tutor } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
-import { Chip } from "@/src/ui";
+import { Chip, VerifiedBadge } from "@/src/ui";
 import { MenuButton } from "@/src/drawer";
 import { flagFor } from "@/src/flags";
 import { track } from "@/src/analytics";
@@ -31,6 +31,7 @@ export default function Explore() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [maxMilesIdx, setMaxMilesIdx] = useState<number>(-1); // -1 means "Any distance"
   const [includeRemote, setIncludeRemote] = useState<boolean>(true);
+  const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
   const [parentHasCoords, setParentHasCoords] = useState<boolean>(false);
   const [parentCity, setParentCity] = useState<string>("");
 
@@ -44,6 +45,7 @@ export default function Explore() {
       const params = new URLSearchParams();
       if (lang !== "All") params.set("language", lang);
       if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
+      if (verifiedOnly) params.set("verified_only", "true");
       if (maxMilesIdx >= 0 && parentHasCoords) {
         params.set("max_miles", String(DISTANCE_STEPS[maxMilesIdx]));
         params.set("include_remote", String(includeRemote));
@@ -67,7 +69,7 @@ export default function Explore() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [lang, debouncedQ, maxMilesIdx, includeRemote, parentHasCoords]);
+  }, [lang, debouncedQ, maxMilesIdx, includeRemote, parentHasCoords, verifiedOnly]);
 
   const loadFavs = useCallback(async () => {
     if (user?.role !== "parent") return;
@@ -98,11 +100,20 @@ export default function Explore() {
   }, []);
 
   const toggleFav = async (id: string) => {
-    const isFav = favs.has(id);
-    const next = new Set(favs);
-    if (isFav) { next.delete(id); await apiFetch(`/favorites/${id}`, { method: "DELETE" }); }
-    else { next.add(id); await apiFetch(`/favorites/${id}`, { method: "POST" }); track("favorite_added", { tutor_id: id }); }
-    setFavs(next);
+    const wasFav = favs.has(id);
+    // Optimistic: flip the heart immediately, roll back if the request fails.
+    const flip = (on: boolean) => setFavs((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(id); else next.delete(id);
+      return next;
+    });
+    flip(!wasFav);
+    try {
+      await apiFetch(`/favorites/${id}`, { method: wasFav ? "DELETE" : "POST" });
+      if (!wasFav) track("favorite_added", { tutor_id: id });
+    } catch {
+      flip(wasFav);
+    }
   };
 
   // Tutors see their dashboard on this tab
@@ -135,6 +146,7 @@ export default function Explore() {
           contentContainerStyle={{ gap: theme.space.sm, paddingHorizontal: theme.space.xl }}
           style={styles.chipsRow}
         >
+          <Chip label="✔ Verified only" selected={verifiedOnly} onPress={() => setVerifiedOnly(!verifiedOnly)} testID="chip-verified" />
           {LANGUAGES.map((l) => (
             <Chip key={l} label={l === "All" ? "All" : `${flagFor(l)} ${l}`} selected={lang === l} onPress={() => setLang(l)} testID={`chip-${l.toLowerCase()}`} />
           ))}
@@ -286,7 +298,10 @@ function TutorCard({ tutor, onPress, isFav, canFav, onFav }: { tutor: Tutor; onP
       </View>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginTop: theme.space.md }}>
         <View style={{ flex: 1 }}>
-          <Text style={cardStyles.name} numberOfLines={1}>{tutor.name}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={[cardStyles.name, { flexShrink: 1 }]} numberOfLines={1}>{tutor.name}</Text>
+            {tutor.verified && <VerifiedBadge />}
+          </View>
           <Text style={cardStyles.meta} numberOfLines={1}>
             {tutor.location || "Location coming soon"}
             {tutor.distance_miles != null ? ` · ${tutor.distance_miles} mi` : ""}
@@ -308,22 +323,30 @@ function TutorCard({ tutor, onPress, isFav, canFav, onFav }: { tutor: Tutor; onP
 
 function TutorHome() {
   const router = useRouter();
-  const [bookings, setBookings] = useState<any[]>([]);
+  const { user } = useAuth();
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    apiFetch<any[]>("/bookings/me").then(setBookings).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  useFocusEffect(useCallback(() => {
+    apiFetch<Booking[]>("/bookings/me").then(setBookings).catch(() => {}).finally(() => setLoading(false));
+  }, []));
   const paid = bookings.filter((b) => b.payment_status === "paid");
-  const earnings = paid.reduce((a, b) => a + b.amount_cents, 0);
+  // amount_cents is what the parent paid; the 1% platform fee isn't the tutor's money.
+  const earnings = paid.reduce((a, b) => a + b.amount_cents - (b.platform_fee_cents ?? 0), 0);
+  const today = new Date().toISOString().slice(0, 10);
+  const requests = bookings.filter((b) => b.payment_status === "paid" && b.tutor_response === "pending");
+  const upcoming = bookings
+    .filter((b) => b.date >= today && b.payment_status !== "canceled" && b.payment_status !== "failed" && b.tutor_response !== "pending")
+    .sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+  const firstName = user?.name?.split(" ")[0];
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.color.surface }} edges={["top"]}>
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.md, paddingTop: theme.space.xs }}>
         <MenuButton tint={theme.color.onSurface} />
         <Text style={{ flex: 1, textAlign: "center", fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginRight: 40 }}>Dashboard</Text>
       </View>
-      <ScrollView contentContainerStyle={{ padding: theme.space.xl, paddingBottom: theme["3xl"] }}>
-        <Text style={{ fontSize: 28, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5 }}>Welcome, tutor</Text>
-        <Text style={{ color: theme.color.onSurfaceSecondary, marginTop: theme.space.xs }}>Here's your day at a glance.</Text>
+      <ScrollView contentContainerStyle={{ padding: theme.space.xl, paddingBottom: theme.space["3xl"] }}>
+        <Text style={{ fontSize: 28, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5 }}>Welcome, {firstName || "tutor"}</Text>
+        <Text style={{ color: theme.color.onSurfaceSecondary, marginTop: theme.space.xs }}>Here&apos;s your day at a glance.</Text>
 
         <View style={dashStyles.grid}>
           <View style={dashStyles.metric} testID="tutor-earnings-card">
@@ -333,27 +356,45 @@ function TutorHome() {
           </View>
           <View style={dashStyles.metric} testID="tutor-sessions-card">
             <Feather name="calendar" size={18} color={theme.color.brand} />
-            <Text style={dashStyles.metricNum}>{bookings.length}</Text>
-            <Text style={dashStyles.metricLabel}>Sessions</Text>
+            <Text style={dashStyles.metricNum}>{paid.length}</Text>
+            <Text style={dashStyles.metricLabel}>Paid sessions</Text>
           </View>
         </View>
+
+        {requests.length > 0 && (
+          <>
+            <Text style={dashStyles.section}>Needs your answer</Text>
+            {requests.map((b) => (
+              <Pressable key={b.id} style={[dashStyles.bookRow, dashStyles.requestRow]} onPress={() => router.push(`/booking-detail/${b.id}`)}
+                testID={`tutor-request-${b.id}`} accessibilityRole="button" accessibilityLabel={`Booking request from ${b.parent_name}, ${b.date} at ${b.time}. Open to accept or decline.`}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontWeight: "700", color: theme.color.brandDark, fontSize: theme.font.lg }}>{b.parent_name} · {b.language}</Text>
+                  <Text style={{ color: theme.color.brandDark, marginTop: 2 }}>{b.date} at {b.time} · {b.duration_minutes} min</Text>
+                </View>
+                <Text style={{ color: theme.color.brandDark, fontWeight: "700" }}>Accept or decline ›</Text>
+              </Pressable>
+            ))}
+          </>
+        )}
 
         <Text style={dashStyles.section}>Upcoming</Text>
         {loading ? (
           <ActivityIndicator color={theme.color.brand} />
-        ) : bookings.length === 0 ? (
+        ) : upcoming.length === 0 ? (
           <View style={dashStyles.empty}>
-            <Text style={{ color: theme.color.onSurfaceSecondary }}>No bookings yet. Update your profile to attract parents.</Text>
+            <Text style={{ color: theme.color.onSurfaceSecondary }}>
+              {bookings.length === 0 ? "No bookings yet. Update your profile to attract parents." : "Nothing coming up right now."}
+            </Text>
           </View>
         ) : (
-          bookings.slice(0, 5).map((b) => (
-            <View key={b.id} style={dashStyles.bookRow}>
+          upcoming.slice(0, 5).map((b) => (
+            <Pressable key={b.id} style={dashStyles.bookRow} onPress={() => router.push(`/booking-detail/${b.id}`)} testID={`tutor-booking-${b.id}`}>
               <View>
                 <Text style={{ fontWeight: "700", color: theme.color.onSurface }}>{b.parent_name} · {b.language}</Text>
                 <Text style={{ color: theme.color.onSurfaceSecondary, marginTop: 2 }}>{b.date} at {b.time} · {b.duration_minutes} min</Text>
               </View>
-              <Text style={{ color: theme.color.brand, fontWeight: "700" }}>${(b.amount_cents / 100).toFixed(0)}</Text>
-            </View>
+              <Text style={{ color: theme.color.brand, fontWeight: "700" }}>${((b.amount_cents - (b.platform_fee_cents ?? 0)) / 100).toFixed(0)}</Text>
+            </Pressable>
           ))
         )}
 
@@ -379,7 +420,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: theme.space.sm,
   },
   searchInput: { flex: 1, fontSize: theme.font.base, color: theme.color.onSurface, padding: 0 },
-  chipsRow: { paddingVertical: theme.space.md, height: 56, flexGrow: 0 },
+  chipsRow: { paddingVertical: theme.space.md, minHeight: 64, flexGrow: 0 },
   distanceBar: {
     paddingHorizontal: theme.space.xl,
     paddingBottom: theme.space.md,
@@ -387,9 +428,9 @@ const styles = StyleSheet.create({
   },
   distanceLabel: { color: theme.color.onSurface, fontWeight: "600", fontSize: theme.font.sm },
   remoteLabel: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, marginRight: 4 },
-  distanceEdge: { color: theme.color.muted, fontSize: 11, minWidth: 34, textAlign: "center" },
+  distanceEdge: { color: theme.color.muted, fontSize: 12, minWidth: 34, textAlign: "center" },
   distanceCta: { color: theme.color.brand, fontWeight: "700" },
-  distanceCaption: { color: theme.color.muted, fontSize: 11, textAlign: "right" },
+  distanceCaption: { color: theme.color.muted, fontSize: 12, textAlign: "right" },
 });
 
 const cardStyles = StyleSheet.create({
@@ -407,7 +448,7 @@ const cardStyles = StyleSheet.create({
     backgroundColor: theme.color.brand, paddingHorizontal: theme.space.md, paddingVertical: 6,
     borderRadius: theme.radius.pill,
   },
-  newBadgeText: { color: "#fff", fontWeight: "700", fontSize: 11, letterSpacing: 0.5, textTransform: "uppercase" },
+  newBadgeText: { color: "#fff", fontWeight: "700", fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase" },
   favBtn: {
     position: "absolute", bottom: theme.space.md, right: theme.space.md,
     width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.35)",
@@ -425,6 +466,7 @@ const dashStyles = StyleSheet.create({
   metricLabel: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm },
   section: { fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space["2xl"], marginBottom: theme.space.md },
   empty: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg, padding: theme.space.lg },
+  requestRow: { backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand, gap: theme.space.md },
   bookRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     padding: theme.space.lg, backgroundColor: theme.color.surfaceSecondary,

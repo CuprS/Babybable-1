@@ -7,7 +7,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from server import db, current_user, optional_user, require_admin, push_notification as _push
+from core import db, current_user, optional_user, require_admin, require_verified_email, push_notification as _push
 
 
 async def push_notification(user_id: str, kind: str, title: str, body: str) -> None:
@@ -84,6 +84,7 @@ async def _clean_images(urls: List[str], owner_id: str) -> List[str]:
 async def create_post(body: PostCreate, u: dict = Depends(current_user)):
     if u.get("role") != "tutor":
         raise HTTPException(403, "Only tutors can submit blog articles")
+    require_verified_email(u)
     images = await _clean_images(body.image_urls, u["id"])
     now = datetime.now(timezone.utc).isoformat()
     doc = {

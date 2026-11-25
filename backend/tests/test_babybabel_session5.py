@@ -28,7 +28,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 BASE = os.environ.get(
-    "EXPO_PUBLIC_BACKEND_URL", "https://papyrus-tutors.preview.emergentagent.com"
+    "EXPO_PUBLIC_BACKEND_URL", "http://localhost:8001"
 ).rstrip("/")
 _mongo = pymongo.MongoClient(os.environ["MONGO_URL"])
 _db = _mongo[os.environ["DB_NAME"]]
@@ -387,10 +387,22 @@ class TestReviews:
         assert tutor_after["reviews_count"] == 1, f"expected 1 review, got {tutor_after['reviews_count']}"
         assert tutor_after["rating"] == 5.0, f"expected avg 5.0, got {tutor_after['rating']}"
 
-        # Add a 3-star review by same parent (unusual but validates rolling avg math)
+        # A second review of the SAME booking is rejected (one review per session).
+        dup = requests.post(
+            f"{BASE}/api/reviews",
+            headers=_auth(parent_ctx["token"]),
+            json={**payload, "rating": 1, "comment": "duplicate"},
+            timeout=15,
+        )
+        assert dup.status_code == 409, f"duplicate review should be 409, got {dup.status_code}"
+
+        # A 3-star review of a second session validates the rolling-average math.
+        booking2 = _inject_past_paid_booking(
+            uid, parent_ctx["user"]["name"], tutor_ids["sofia_doc"], "TEST_SESSION5_review2"
+        )
         payload2 = {
             "tutor_id": tutor_ids["sofia"],
-            "booking_id": booking["id"],
+            "booking_id": booking2["id"],
             "rating": 3,
             "comment": "Second sample",
         }

@@ -24,7 +24,7 @@ export function LandingPage({ title, eyebrow, heroImage, intro, sections = [], c
   return (
     <View style={{ flex: 1, backgroundColor: theme.color.surface }} testID={testID}>
       <SafeAreaView edges={["top"]} style={styles.headerBar}>
-        <Pressable onPress={() => router.back()} hitSlop={12} testID="landing-back">
+        <Pressable onPress={() => router.back()} hitSlop={12} testID="landing-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
@@ -82,8 +82,8 @@ const styles = StyleSheet.create({
   heroWrap: { width: "100%", aspectRatio: 16 / 10, backgroundColor: theme.color.surfaceSecondary },
   hero: { width: "100%", height: "100%" },
   heroOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: theme.space.xl },
-  eyebrow: { color: "rgba(255,255,255,0.85)", fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 11 },
-  eyebrowDark: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 11 },
+  eyebrow: { color: "rgba(255,255,255,0.85)", fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 12 },
+  eyebrowDark: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 12 },
   heroTitle: { color: "#fff", fontSize: 32, fontWeight: "700", letterSpacing: -0.5, marginTop: theme.space.xs },
   title: { fontSize: 32, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5 },
   intro: { fontSize: theme.font.lg, color: theme.color.onSurfaceSecondary, lineHeight: 24 },

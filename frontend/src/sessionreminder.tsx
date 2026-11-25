@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   grabber: { alignSelf: "center", width: 44, height: 4, borderRadius: 2, backgroundColor: theme.color.borderStrong, marginTop: 10 },
   header: { flexDirection: "row", alignItems: "flex-start", padding: theme.space.lg, paddingBottom: theme.space.sm, gap: theme.space.md },
   eyebrow: {
-    color: theme.color.brand, fontWeight: "700", fontSize: 11,
+    color: theme.color.brand, fontWeight: "700", fontSize: 12,
     textTransform: "uppercase", letterSpacing: 0.6,
   },
   title: { fontSize: 22, fontWeight: "700", color: theme.color.onSurface, marginTop: 2, letterSpacing: -0.3 },

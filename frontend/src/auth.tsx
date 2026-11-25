@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { storage } from "@/src/utils/storage";
-import { apiFetch, TOKEN_KEY, UserPublic, Role, onAccountSuspended } from "@/src/api";
+import { apiFetch, TOKEN_KEY, UserPublic, Role, onAccountSuspended, deviceTimeZone } from "@/src/api";
+import { registerForPush, unregisterPush } from "@/src/push";
 
 interface AuthState {
   user: UserPublic | null;
@@ -11,6 +12,8 @@ interface AuthState {
   signUp: (email: string, password: string, name: string, role: Role) => Promise<UserPublic>;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
+  signInWithToken: (token: string, user: UserPublic) => Promise<void>;
+  setUser: (user: UserPublic) => void;
 }
 
 const AuthCtx = createContext<AuthState | undefined>(undefined);
@@ -46,6 +49,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => onAccountSuspended(null);
   }, []);
 
+  // Once signed in: register this device for push, and keep the account's time zone current
+  // so reminders arrive at the right local time.
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId || !user) return;
+    registerForPush();
+    const tz = deviceTimeZone();
+    if (tz && tz !== user.timezone && !user.is_admin) {
+      apiFetch<UserPublic>("/auth/me", { method: "PATCH", body: JSON.stringify({ timezone: tz }) })
+        .then(setUser)
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
   const signIn = async (email: string, password: string) => {
     const data = await apiFetch<{ access_token: string; user: UserPublic }>("/auth/login", {
       method: "POST",
@@ -60,7 +78,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, name: string, role: Role) => {
     const data = await apiFetch<{ access_token: string; user: UserPublic }>("/auth/signup", {
       method: "POST",
-      body: JSON.stringify({ email, password, name, role }),
+      body: JSON.stringify({ email, password, name, role, timezone: deviceTimeZone() }),
     });
     await storage.secureSet(TOKEN_KEY, data.access_token);
     setUser(data.user);
@@ -68,12 +86,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    await unregisterPush();
     await storage.secureRemove(TOKEN_KEY);
     setUser(null);
   };
 
+  /** Use a token from a password reset to sign straight in. */
+  const signInWithToken = async (token: string, u: UserPublic) => {
+    await storage.secureSet(TOKEN_KEY, token);
+    setSuspended(false);
+    setUser(u);
+  };
+
   return (
-    <AuthCtx.Provider value={{ user, loading, suspended, clearSuspended: () => setSuspended(false), signIn, signUp, signOut, refresh }}>
+    <AuthCtx.Provider value={{ user, loading, suspended, clearSuspended: () => setSuspended(false), signIn, signUp, signOut, refresh, signInWithToken, setUser }}>
       {children}
     </AuthCtx.Provider>
   );

@@ -11,13 +11,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, EmailStr, Field
 
 from email_service import send_email
-from server import db, current_user, require_admin, blocked_between, push_notification, email_fingerprint
+from core import db, current_user, require_admin, blocked_between, push_notification, email_fingerprint, ADMIN_EMAIL
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 AUTO_SUSPEND_THRESHOLD = 3  # distinct people blocking someone -> paused for admin review
-DEFAULT_ALERT_EMAIL = "copperstone17@gmail.com"
+DEFAULT_ALERT_EMAIL = ADMIN_EMAIL
 REASON_LABEL = {
     "spam": "Spam", "harassment": "Harassment or bullying", "inappropriate": "Inappropriate content or behaviour",
     "safety": "Child safety concern", "fake": "Fake profile or scam", "other": "Something else",
@@ -50,9 +50,23 @@ def _alert_html(title: str, rows: list[tuple[str, str]], note: str) -> str:
     )
 
 
+FALLBACK_ALERT_HTML = _alert_html(
+    "Safety alert", [],
+    "A safety event needs your review. Details are on the Admin page (Blocks & reports / Safety).",
+)
+
+
 async def _notify_admin(subject: str, html: str) -> None:
     """Send now; if the provider refuses (e.g. burst rate limit), park it in an outbox."""
-    if not await send_email(to=await safety_alert_email(), subject=subject, html=html):
+    try:
+        sent = await send_email(to=await safety_alert_email(), subject=subject, html=html)
+    except ValueError as e:
+        # The outbound-email guardrail rejected the user-written details (e.g. they quote
+        # a URL or mention a password). Never drop a safety alert — send a generic one.
+        logger.warning(f"Safety alert body rejected by email guardrail ({e}); sending generic alert")
+        subject, html = "Babybabel safety alert", FALLBACK_ALERT_HTML
+        sent = await send_email(to=await safety_alert_email(), subject=subject, html=html)
+    if not sent:
         await db.email_outbox.insert_one({
             "id": str(uuid.uuid4()), "subject": subject, "html": html, "attempts": 1,
             "created_at": datetime.now(timezone.utc).isoformat(),

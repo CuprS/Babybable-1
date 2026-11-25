@@ -1,7 +1,6 @@
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { theme } from "@/src/theme";
-import { View } from "react-native";
 
 export default function TabsLayout() {
   return (
@@ -17,7 +16,7 @@ export default function TabsLayout() {
           paddingBottom: 12,
           paddingTop: 8,
         },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
       }}
     >
       <Tabs.Screen

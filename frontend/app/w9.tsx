@@ -190,7 +190,7 @@ export default function W9Screen() {
   return (
     <SafeAreaView style={styles.wrap} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} testID="w9-back">
+        <Pressable onPress={() => router.back()} hitSlop={12} testID="w9-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.title}>Form W-9</Text>
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
   pillOn: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
   pillText: { color: theme.color.onSurface, fontWeight: "700" },
   pillTextOn: { color: "#fff" },
-  tinyHint: { color: theme.color.muted, fontSize: 11, marginTop: 2 },
+  tinyHint: { color: theme.color.muted, fontSize: 12, marginTop: 2 },
   checkRow: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingVertical: 6 },
   checkText: { color: theme.color.onSurface, flex: 1, fontSize: theme.font.base },
   secondaryBtn: {

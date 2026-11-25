@@ -26,7 +26,7 @@ import requests
 
 BASE_URL = (
     os.environ.get("EXPO_PUBLIC_BACKEND_URL")
-    or "https://papyrus-tutors.preview.emergentagent.com"
+    or "http://localhost:8001"
 ).rstrip("/")
 # Direct origin base URL (bypasses Cloudflare/ingress which rewrites Cache-Control
 # on all responses to "no-store, no-cache, must-revalidate"). We use this only for
@@ -644,7 +644,11 @@ class TestDeleteAccountPurge:
         # POST-DELETE DB CHECKS
         post = self._db_snapshot(uid_tutor)
         assert post["users"] is None, "users row still exists"
-        assert post["w9_forms"] is None, "w9_forms row still exists"
+        # W-9s are retained (IRS: 4 years), flagged for purge, TIN still encrypted.
+        if post["w9_forms"] is not None:
+            assert post["w9_forms"].get("account_deleted_at"), "retained W-9 not flagged as deleted"
+            assert post["w9_forms"].get("retain_until"), "retained W-9 has no purge date"
+            assert "123456789" not in str(post["w9_forms"]), "TIN stored in plain text"
         assert post["notifications"] is None, "notifications row still exists"
         assert post["events"] is None, "events row still exists"
         assert post["favorites"] is None, "favorites row still exists"

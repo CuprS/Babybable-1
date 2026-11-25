@@ -95,12 +95,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radius.pill,
     backgroundColor: theme.color.brand,
   },
-  miniText: { color: "#fff", fontWeight: "700", fontSize: 11 },
+  miniText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   miniGhost: {
     paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radius.pill,
     borderWidth: 1, borderColor: theme.color.borderStrong,
   },
-  miniGhostText: { color: theme.color.onSurface, fontWeight: "700", fontSize: 11 },
+  miniGhostText: { color: theme.color.onSurface, fontWeight: "700", fontSize: 12 },
   cell: {
     minWidth: 60, paddingHorizontal: 10, paddingVertical: 8, borderRadius: theme.radius.md,
     borderWidth: 1, borderColor: theme.color.border, backgroundColor: theme.color.surface,

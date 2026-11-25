@@ -148,5 +148,5 @@ const styles = StyleSheet.create({
   download: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, backgroundColor: theme.color.brandSoft, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm, borderRadius: theme.radius.pill, alignSelf: "flex-start" },
   downloadText: { color: theme.color.brandDark, fontWeight: "700" },
   privacy: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.base, fontWeight: "600", textDecorationLine: "underline" },
-  tag: { color: theme.color.muted, fontSize: 11 },
+  tag: { color: theme.color.muted, fontSize: 12 },
 });

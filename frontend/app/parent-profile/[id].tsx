@@ -39,7 +39,7 @@ export default function ParentPublic() {
     return (
       <SafeAreaView style={styles.root} edges={["top"]}>
         <View style={styles.header}>
-          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="parent-public-back">
+          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="parent-public-back" accessibilityRole="button" accessibilityLabel="Go back">
             <Feather name="arrow-left" size={22} color={theme.color.onSurface} />
           </Pressable>
           <Text style={styles.headerTitle}>Family profile</Text>
@@ -60,7 +60,7 @@ export default function ParentPublic() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="parent-public-back">
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="parent-public-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>Family profile</Text>
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 26, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space.md, letterSpacing: -0.5 },
   city: { color: theme.color.onSurfaceSecondary, marginTop: 4, fontSize: theme.font.lg },
   previewBadge: { marginTop: theme.space.md, backgroundColor: theme.color.brand, paddingHorizontal: theme.space.md, paddingVertical: 6, borderRadius: theme.radius.pill },
-  previewBadgeText: { color: "#fff", fontWeight: "700", fontSize: 11, letterSpacing: 0.5 },
+  previewBadgeText: { color: "#fff", fontWeight: "700", fontSize: 12, letterSpacing: 0.5 },
   section: { fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space["2xl"], marginBottom: theme.space.md },
   langs: { flexDirection: "row", gap: theme.space.sm, flexWrap: "wrap" },
   langChip: { paddingHorizontal: theme.space.lg, paddingVertical: 8, borderRadius: theme.radius.pill, backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand },

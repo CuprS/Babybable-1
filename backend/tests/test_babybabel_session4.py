@@ -28,7 +28,7 @@ from dotenv import load_dotenv
 # Load backend .env so we can talk to Mongo directly for setup/teardown of stale test data.
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-BASE = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "https://papyrus-tutors.preview.emergentagent.com").rstrip("/")
+BASE = os.environ.get("EXPO_PUBLIC_BACKEND_URL", "http://localhost:8001").rstrip("/")
 _mongo = pymongo.MongoClient(os.environ["MONGO_URL"])
 _db = _mongo[os.environ["DB_NAME"]]
 

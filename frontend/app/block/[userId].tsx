@@ -69,7 +69,7 @@ export default function BlockUser() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]} testID="block-screen">
       <View style={styles.header}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="block-back">
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="block-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="x" size={22} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>Block {who}</Text>

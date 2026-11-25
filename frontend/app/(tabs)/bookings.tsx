@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, FlatList, ActivityIndicator, RefreshControl, Pr
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Feather } from "@expo/vector-icons";
-import { apiFetch, Booking } from "@/src/api";
+import { apiFetch, Booking, bookingStatus } from "@/src/api";
 import { theme } from "@/src/theme";
 import { useAuth } from "@/src/auth";
 import { MenuButton } from "@/src/drawer";
@@ -25,8 +25,7 @@ export default function Bookings() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const statusColor = (s: string) =>
-    s === "paid" ? theme.color.success : s === "failed" ? theme.color.error : theme.color.warning;
+  const toneColor = { success: theme.color.success, warning: "#9A6A12", error: theme.color.error, muted: theme.color.onSurfaceSecondary };
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -54,30 +53,38 @@ export default function Bookings() {
               </Text>
             </View>
           }
-          renderItem={({ item }) => (
+          renderItem={({ item }) => {
+            const st = bookingStatus(item);
+            return (
             <Pressable
               testID={`booking-${item.id}`}
               onPress={() => router.push(`/booking-detail/${item.id}`)}
-              style={styles.card}
+              style={[styles.card, item.payment_status === "canceled" && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`${user?.role === "parent" ? item.tutor_name : item.parent_name}, ${item.date} at ${item.time}, ${st.label}`}
             >
-              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={styles.who}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", gap: theme.space.sm }}>
+                <Text style={[styles.who, { flex: 1 }]}>
                   {user?.role === "parent" ? item.tutor_name : item.parent_name}
                 </Text>
-                <View style={[styles.badge, { backgroundColor: statusColor(item.payment_status) }]}>
-                  <Text style={styles.badgeText}>{item.payment_status}</Text>
+                <View style={[styles.badge, { borderColor: toneColor[st.tone] }]}>
+                  <Text style={[styles.badgeText, { color: toneColor[st.tone] }]}>{st.label}</Text>
                 </View>
               </View>
               <Text style={styles.meta}>{item.language} · {item.duration_minutes} min{item.is_au_pair ? ` · au-pair · ${item.lessons_count} lessons` : ""}</Text>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: theme.space.md }}>
                 <Text style={styles.date}>{item.date} · {item.time}</Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text style={styles.amount}>${(item.amount_cents / 100).toFixed(0)}</Text>
+                  <Text style={styles.amount}>
+                    {/* Parents see what they paid; tutors see what they earn (minus the 1% platform fee). */}
+                    ${((item.amount_cents - (user?.role === "tutor" ? item.platform_fee_cents ?? 0 : 0)) / 100).toFixed(0)}
+                  </Text>
                   <Feather name="chevron-right" size={20} color={theme.color.muted} />
                 </View>
               </View>
             </Pressable>
-          )}
+            );
+          }}
         />
       )}
     </SafeAreaView>
@@ -95,6 +102,6 @@ const styles = StyleSheet.create({
   meta: { color: theme.color.onSurfaceSecondary },
   date: { color: theme.color.onSurfaceSecondary },
   amount: { color: theme.color.brand, fontWeight: "700", fontSize: theme.font.lg },
-  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radius.pill },
-  badgeText: { color: "#fff", fontWeight: "700", fontSize: 11, textTransform: "capitalize" },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radius.pill, borderWidth: 1.5, backgroundColor: theme.color.surface },
+  badgeText: { fontWeight: "700", fontSize: theme.font.sm },
 });

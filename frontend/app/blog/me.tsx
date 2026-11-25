@@ -57,7 +57,7 @@ export default function MyPosts() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]} testID="my-posts-screen">
       <View style={styles.headerBar}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/blog"))} hitSlop={12} testID="my-posts-back">
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/blog"))} hitSlop={12} testID="my-posts-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={22} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>My articles</Text>

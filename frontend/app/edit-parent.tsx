@@ -109,7 +109,7 @@ export default function EditParent() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} testID="edit-parent-back"><Feather name="arrow-left" size={24} color={theme.color.onSurface} /></Pressable>
+        <Pressable onPress={() => router.back()} testID="edit-parent-back" accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={24} color={theme.color.onSurface} /></Pressable>
         <Text style={styles.title}>Family profile</Text>
         <View style={{ width: 24 }} />
       </View>

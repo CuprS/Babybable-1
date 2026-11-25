@@ -111,7 +111,7 @@ export default function ComposePost() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]} testID="compose-screen">
       <View style={styles.headerBar}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/blog"))} hitSlop={12} testID="compose-back">
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/blog"))} hitSlop={12} testID="compose-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="x" size={22} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.headerTitle}>{id ? "Edit article" : "New article"}</Text>
@@ -183,14 +183,14 @@ const styles = StyleSheet.create({
   content: { padding: theme.space.xl, gap: theme.space.lg, paddingBottom: theme.space["3xl"] },
   label: { fontSize: theme.font.sm, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
   hint: { color: theme.color.muted, fontSize: theme.font.sm, lineHeight: 18 },
-  counter: { color: theme.color.muted, fontSize: 11, marginTop: -theme.space.sm, textAlign: "right" },
+  counter: { color: theme.color.muted, fontSize: 12, marginTop: -theme.space.sm, textAlign: "right" },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: theme.space.sm },
   photos: { flexDirection: "row", gap: theme.space.md, marginTop: theme.space.xs },
   photo: { width: 140, height: 105, borderRadius: theme.radius.md, overflow: "hidden", backgroundColor: theme.color.surfaceSecondary },
   addPhoto: { alignItems: "center", justifyContent: "center", gap: 4, borderWidth: 1, borderStyle: "dashed", borderColor: theme.color.borderStrong },
   addText: { color: theme.color.brandDark, fontWeight: "600", fontSize: theme.font.sm },
   coverBadge: { position: "absolute", left: 6, bottom: 6, backgroundColor: theme.color.surfaceInverse, paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.radius.pill },
-  coverText: { color: theme.color.onSurfaceInverse, fontSize: 11, fontWeight: "700" },
+  coverText: { color: theme.color.onSurfaceInverse, fontSize: 12, fontWeight: "700" },
   remove: { position: "absolute", right: 6, top: 6, width: 28, height: 28, borderRadius: 14, backgroundColor: theme.color.surfaceInverse, alignItems: "center", justifyContent: "center" },
   notes: { padding: theme.space.lg, borderRadius: theme.radius.md, backgroundColor: theme.color.brandSoft, gap: 4 },
   notesTitle: { color: theme.color.brandDark, fontWeight: "700" },

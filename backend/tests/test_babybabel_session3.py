@@ -20,7 +20,7 @@ import pytest
 import requests
 
 
-BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "https://papyrus-tutors.preview.emergentagent.com").rstrip("/")
+BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "http://localhost:8001").rstrip("/")
 
 PARENT_EMAIL = "parent@test.dev"
 PARENT_PW = "password123"

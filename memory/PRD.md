@@ -25,13 +25,13 @@
   - **booking reminder 2 h before session**
   - **review request 30 min after session**
 - [x] **Favourite tutors** — `POST/DELETE /api/favorites/{tutor_id}` + `GET /api/favorites`.
-- [x] **Analytics** — dual sink: local `/api/events` + **PostHog** (`posthog-react-native` on client, `posthog` on backend). Server captures `signup`, `booking_created`, and forwards all client events. Provide `EXPO_PUBLIC_POSTHOG_KEY` + `POSTHOG_PROJECT_TOKEN` to enable.
+- [x] **Analytics** — client events (`track()` in `src/analytics.ts`) go to `POST /api/events` and are shown on the Admin page. *PostHog is not wired up* (an earlier note said it was; the packages were never installed). To add it, install `posthog-react-native` and forward from `track()`.
 - [x] Global side drawer with 6 marketing landing pages + Download-the-app (web) + Privacy Policy.
 - [x] Delete account (both roles) — cascades bookings, messages, uploads, reviews.
 - [x] **Tutor contribution blog** — public `/blog` list + `/blog/[id]` (readable signed-out), tutor `/blog/compose` (title, topic, summary, body, up to 2 uploaded photos; first = cover) and `/blog/me` (In review / Published / Needs revisions + admin feedback, revise & resubmit). Admin "Blog submissions" panel in `/admin` (publish / reject with required note / unpublish). 4 editorial posts seeded. Backend in `backend/routes/blog.py`; W-9 routes moved to `backend/routes/w9.py`.
 - [x] **Security hardening (audit follow-up)** — CORS limited to the app's own origins (`CORS_ORIGINS` / `CORS_ORIGIN_REGEX` env override); file downloads accept the Authorization header only (no `?token=`); family profile visible only to owner, admin, and tutors with a booking or a chat the family took part in, never exact coordinates for non-owners; message limits 20/min and 300/day per sender (text + invitations), max 10 new-family cold conversations per tutor per day, message text 1–4000 chars.
 - [x] **User blocking** — block button in chat header, tutor profile and family profile opens `/block/[userId]`: pick a reason (spam, harassment, inappropriate, child safety, fake, other + details), tick "permanent" confirmation, block → success screen. Blocks are permanent and mutual: no messages/invitations/bookings/reviews, the conversation is hidden from both inboxes, the tutor disappears from the parent's search and map, and profiles return not found both ways. Admins can't be blocked; reasons are visible only on the Admin page ("Blocks & reports"). Backend in `backend/routes/blocks.py`.
-- [x] **Safety automation** — (1) Block-evasion guard: blocks placed on a user survive account deletion (keyed by email fingerprint: lower-case, +tag stripped, SHA-256) and re-attach on re-signup; a paused account that's deleted stays paused when re-created (`db.account_tombstones`). (2) Child-safety block → instant email alert via Emergent-managed Resend (`backend/email_service.py`) to the address set on the Admin page (default copperstone17@gmail.com, stored in `db.settings`). (3) Auto-pause: blocked by 3 different people → account paused (HTTP 423 on every call/login, hidden from search, app shows `/suspended`), admin emailed; Admin "Safety" panel lists paused accounts with Reinstate (only blocks after reinstatement count toward the next pause).
+- [x] **Safety automation** — (1) Block-evasion guard: blocks placed on a user survive account deletion (keyed by email fingerprint: lower-case, +tag stripped, SHA-256) and re-attach on re-signup; a paused account that's deleted stays paused when re-created (`db.account_tombstones`). (2) Child-safety block → instant email alert via Emergent-managed Resend (`backend/email_service.py`) to the address set on the Admin page (default `ADMIN_EMAIL` from `.env`, stored in `db.settings`). (3) Auto-pause: blocked by 3 different people → account paused (HTTP 423 on every call/login, hidden from search, app shows `/suspended`), admin emailed; Admin "Safety" panel lists paused accounts with Reinstate (only blocks after reinstatement count toward the next pause).
 
 
 
@@ -48,19 +48,28 @@
 - [x] **Morning-of Session Reminder** — server emits `morning:<booking_id>` on the day of a paid session; the NotificationsWatcher opens a warm "Session today" bottom sheet with **Get directions** (opens the native Maps app / Google Maps in web) and **Message tutor** (jumps to the chat thread). Falls back gracefully for remote lessons and unpinned tutor locations.
 - [x] **W-9 tax form (US tutors)** — after a tutor completes their first paid session, they get a `w9:required` notification with a "Fill W-9" action button in the toast. Full IRS-style form (legal name, business/DBA, federal tax classification with LLC + Other sub-choices, address, SSN/EIN, signature, US-person + backup-withholding certifications) upserts into `db.w9_forms`. TINs are now **encrypted with Fernet** and can be rotated at any time via `W9_ENCRYPTION_KEYS` (comma-separated) in `.env`; `GET /api/admin/w9-encryption-status` reports how many records still use retired keys. Startup migration auto-upgrades any legacy records. Both the tutor and admins can preview + print the form as a clean 1-page HTML (via `expo-print` on native, `window.print()` on web). Admin dashboard has a "Tax forms (W-9)" section listing every submission with print buttons.
 
+- [x] **Fixes (review, Nov 2026)** — tutors now see their own bookings (bookings store the tutor *profile* id; tutor-side lookups used the user id); "9:00" vs "09:00" double-booking; reviews limited to one per finished paid session; uploads typed by extension + 10 MB cap; seed tutors no longer use a public password.
+- [x] **Password reset + email verification** — 6-digit emailed codes (15 min, 5 tries); reset signs out other sessions (`token_version`); `REQUIRE_EMAIL_VERIFICATION` gates booking/messaging/posting.
+- [x] **Time zones** — tutors have an IANA `timezone`; bookings store it; all reminders, "has it started" checks and past-date checks use it; the app labels times when you're in another zone.
+- [x] **Overlap-aware booking** — a 2 h session blocks the hours it covers; unique `slot_key` index stops same-start races.
+- [x] **Booking lifecycle** — tutor accepts/declines paid requests within 24 h (else auto-refund); cancel with refund policy (full refund ≥24 h ahead or when the tutor cancels); reschedule up to 24 h before; unpaid bookings release after 30 min; refunds reverse the platform fee.
+- [x] **Tutor verification** — photo ID + background-check certificate upload, admin approve/send back, ✔ Verified badge and "Verified only" search filter. Manual review — no third-party checking provider yet.
+- [x] **Push notifications** — Expo push tokens per device; every notification is also pushed; taps open the booking/chat; background worker sends reminders without the app open.
+- [x] **Retention** — account deletion keeps anonymised bookings/reviews and the encrypted W-9 for 4 years (then purged); stored files deleted best-effort.
+- [x] **SEO** — server-rendered share pages for tutors and blog posts with Open Graph tags; sitemap at `/api/seo/sitemap.xml`; page titles on web.
+- [x] **Engineering** — `server.py` split into `core`/`models`/`routes/*`; in-process test suite (`tests_inprocess/`); integration tests default to localhost; GitHub Actions CI.
+- [x] **Accessibility** — minimum 12 px text, larger tap targets, screen-reader labels/roles on buttons, chips, inputs and back arrows.
+
 ## MOCKED / Deferred
-- Stripe PaymentSheet remains MOCKED — backend creates real PaymentIntent when a valid key is set, else falls back. Ready to swap in `@stripe/stripe-react-native` PaymentSheet on the first EAS dev build.
-- Push notifications currently surface as in-app toasts. When you generate an EAS dev build, we can drop in Emergent-managed push using the same notification records — the plumbing is already there.
+- Stripe PaymentSheet remains MOCKED — backend creates real PaymentIntent (and real refunds) when a valid key is set, else falls back. Ready to swap in `@stripe/stripe-react-native` PaymentSheet on the first EAS dev build.
+- Push needs an EAS project id + a dev/production build (not Expo Go).
+- Background checks are reviewed manually by an admin; no automated provider is integrated.
 
 ## Required environment variables
-Backend `.env`:
-```
-MONGO_URL, DB_NAME, JWT_SECRET, STRIPE_API_KEY, EMERGENT_LLM_KEY,
-POSTHOG_PROJECT_TOKEN, POSTHOG_HOST
-```
+Backend `.env`: see `backend/.env.example` (required: `MONGO_URL`, `DB_NAME`, `JWT_SECRET`).
 Frontend `.env`:
 ```
-EXPO_PUBLIC_BACKEND_URL, EXPO_PUBLIC_POSTHOG_KEY, EXPO_PUBLIC_POSTHOG_HOST
+EXPO_PUBLIC_BACKEND_URL
 ```
 
 ## Smart business enhancement

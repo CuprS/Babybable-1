@@ -11,6 +11,7 @@ import { Button } from "@/src/ui";
 import { AdminBlogPanel } from "@/src/AdminBlogPanel";
 import { AdminBlocksPanel } from "@/src/AdminBlocksPanel";
 import { AdminSafetyPanel } from "@/src/AdminSafetyPanel";
+import { AdminVerificationPanel } from "@/src/AdminVerificationPanel";
 
 interface Stats {
   users: number; parents: number; tutors: number;
@@ -129,6 +130,7 @@ export default function Admin() {
             ))
           )}
 
+          <AdminVerificationPanel reloadKey={reloadKey} />
           <AdminBlogPanel reloadKey={reloadKey} />
           <AdminSafetyPanel reloadKey={reloadKey} />
           <AdminBlocksPanel reloadKey={reloadKey} />
@@ -189,7 +191,7 @@ export default function Admin() {
 
           <Text style={styles.section}>Recent events {filter ? `· ${filter}` : ""}</Text>
           {events.length === 0 ? (
-            <Text style={styles.muted}>No events tracked yet — as parents browse and book, they'll show up here in real time.</Text>
+            <Text style={styles.muted}>No events tracked yet — as parents browse and book, they&apos;ll show up here in real time.</Text>
           ) : (
             events.map((e, i) => (
               <View key={i} style={styles.eventRow}>
@@ -243,7 +245,7 @@ const styles = StyleSheet.create({
   eventRow: { padding: theme.space.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, marginBottom: theme.space.sm },
   eventName: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.brand },
   eventMeta: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, marginTop: 4 },
-  eventProps: { color: theme.color.muted, fontSize: 11, marginTop: 4, fontFamily: "monospace" },
+  eventProps: { color: theme.color.muted, fontSize: 12, marginTop: 4, fontFamily: "monospace" },
   muted: { color: theme.color.onSurfaceSecondary },
   earnHero: {
     marginTop: theme.space.xl,

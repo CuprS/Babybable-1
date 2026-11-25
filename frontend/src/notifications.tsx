@@ -14,23 +14,23 @@ const REVIEWED_KEY = "bb_reviewed_bookings"; // JSON array of bookingIds we've a
 const MORNING_KEY = "bb_morning_bookings"; // JSON array of bookingIds we've opened today
 
 async function readJsonList(key: string): Promise<string[]> {
-  const raw = (await storage.get<string>(key, "")) || "";
+  const raw = (await storage.getItem<string>(key, "")) || "";
   try { return raw ? (JSON.parse(raw) as string[]) : []; } catch { return []; }
 }
 
 async function pushJsonList(key: string, value: string, cap = 100) {
   const arr = await readJsonList(key);
   if (!arr.includes(value)) arr.push(value);
-  await storage.set(key, JSON.stringify(arr.slice(-cap)));
+  await storage.setItem(key, JSON.stringify(arr.slice(-cap)));
 }
 
 // Reset the morning-of dedupe list at UTC-midnight rollover so it re-fires next day.
 async function pruneMorningIfNewDay() {
-  const stamp = (await storage.get<string>(MORNING_KEY + "_day", "")) || "";
+  const stamp = (await storage.getItem<string>(MORNING_KEY + "_day", "")) || "";
   const today = new Date().toISOString().slice(0, 10);
   if (stamp !== today) {
-    await storage.set(MORNING_KEY, JSON.stringify([]));
-    await storage.set(MORNING_KEY + "_day", today);
+    await storage.setItem(MORNING_KEY, JSON.stringify([]));
+    await storage.setItem(MORNING_KEY + "_day", today);
   }
 }
 
@@ -50,7 +50,7 @@ export function NotificationsWatcher() {
       try {
         await pruneMorningIfNewDay();
         const list = await apiFetch<Notif[]>("/notifications");
-        const seen = (await storage.get<string>(SEEN_KEY, "")) || "";
+        const seen = (await storage.getItem<string>(SEEN_KEY, "")) || "";
         const fresh = list.filter((n) => n.at > seen);
         if (fresh.length && seen) {
           fresh.slice(-3).reverse().forEach((n) => {
@@ -101,9 +101,10 @@ export function NotificationsWatcher() {
             break;
           }
         }
-        if (list[0]) await storage.set(SEEN_KEY, list[0].at);
+        if (list[0]) await storage.setItem(SEEN_KEY, list[0].at);
       } catch {}
-      if (!cancelled) timer.current = setTimeout(tick, 6000);
+      // Push notifications carry anything urgent; this poll only refreshes the in-app feed.
+      if (!cancelled) timer.current = setTimeout(tick, 30000);
     };
     tick();
     return () => { cancelled = true; if (timer.current) clearTimeout(timer.current); };

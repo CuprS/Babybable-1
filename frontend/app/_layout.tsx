@@ -1,7 +1,7 @@
 import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { LogBox, StatusBar } from "react-native";
+import { StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -12,8 +12,8 @@ import { ToastProvider } from "@/src/toast";
 import { NotificationsWatcher } from "@/src/notifications";
 import { ReviewPromptProvider } from "@/src/reviewprompt";
 import { SessionReminderProvider } from "@/src/sessionreminder";
+import { listenForNotificationTaps } from "@/src/push";
 
-LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
 
 function AuthGate() {
@@ -23,7 +23,7 @@ function AuthGate() {
 
   useEffect(() => {
     if (loading) return;
-    const publicRoutes = ["find-tutor", "become-tutor", "languages-near-you", "support", "mission", "blog", "privacy", "suspended"];
+    const publicRoutes = ["find-tutor", "become-tutor", "languages-near-you", "support", "mission", "blog", "privacy", "suspended", "tutor"];
     const inAuth = segments[0] === "(auth)" || segments[0] === "onboarding";
     const isPublic = publicRoutes.includes(String(segments[0] ?? ""));
     const inAdmin = segments[0] === "admin";
@@ -37,6 +37,8 @@ function AuthGate() {
       if (segments[0] === "(tabs)") router.replace("/admin");
     }
   }, [user, loading, suspended, segments, router]);
+
+  useEffect(() => listenForNotificationTaps(), []);
 
   return (
     <Stack
@@ -53,6 +55,8 @@ function AuthGate() {
       <Stack.Screen name="booking-detail/[id]" options={{ animation: "slide_from_right", animationDuration: 260 }} />
       <Stack.Screen name="payment/[id]" options={{ animation: "slide_from_bottom", animationDuration: 320 }} />
       <Stack.Screen name="chat/[userId]" options={{ animation: "slide_from_right" }} />
+      <Stack.Screen name="verify-email" options={{ animation: "slide_from_bottom" }} />
+      <Stack.Screen name="verify-tutor" options={{ animation: "slide_from_right" }} />
     </Stack>
   );
 }
