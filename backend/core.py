@@ -61,7 +61,15 @@ PENDING_PAYMENT_MINUTES = int(os.environ.get("PENDING_PAYMENT_MINUTES", "30"))
 W9_RETENTION_DAYS = int(os.environ.get("W9_RETENTION_DAYS", str(4 * 365)))
 
 
-client = AsyncIOMotorClient(MONGO_URL)
+# MONGO_URL=memory://data/dev-db.json runs a local, file-backed stand-in (see devdb.py) so the
+# app works on a laptop without MongoDB. Anything else is a real MongoDB connection string.
+DEV_DATABASE = MONGO_URL.startswith("memory://")
+if DEV_DATABASE:
+    import devdb
+
+    client = devdb.make_client()
+else:
+    client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
 logger = logging.getLogger("babybabel")

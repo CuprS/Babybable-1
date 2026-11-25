@@ -28,7 +28,7 @@ jobs:
       - name: Install
         run: pip install -r requirements-dev.txt
       - name: Lint
-        run: flake8 --select=E9,F63,F7,F82,F401,F811,F841 core.py models.py storage.py booking_service.py workers.py seed.py server.py email_service.py routes tests_inprocess
+        run: flake8 --select=E9,F63,F7,F82,F401,F811,F841 core.py models.py storage.py devdb.py run_dev.py booking_service.py workers.py seed.py server.py email_service.py routes tests_inprocess
       - name: In-process tests (no server or database needed)
         run: pytest tests_inprocess -n 2
 

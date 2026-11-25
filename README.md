@@ -101,22 +101,51 @@ Set `PUBLIC_WEB_URL` so the links in them are absolute.
 
 ## Run locally
 
-**Backend**
+You need Python 3.12 and Node 22. Nothing else: no MongoDB, Docker or cloud accounts.
+
+**Backend** (http://127.0.0.1:8001)
 
 ```bash
 cd backend
-cp .env.example .env          # fill in MONGO_URL, DB_NAME, JWT_SECRET (32+ chars), ADMIN_* …
+python -m venv .venv && .venv/Scripts/activate      # macOS/Linux: source .venv/bin/activate
 pip install -r requirements-dev.txt
-uvicorn server:app --reload --port 8001
+python run_dev.py
 ```
 
-**Frontend**
+`run_dev.py` starts the API with development defaults:
+
+- **Database:** a local stand-in saved to `backend/data/dev-db.json`, so data survives restarts.
+  Delete that file to start fresh.
+- **Uploads:** stored in `backend/data/uploads`.
+- **Email:** nothing is sent; verification and reset codes are printed in the terminal.
+- **Sample logins:** tutors `sofia@babybabel.dev` / `marie@babybabel.dev` (password `password123`),
+  admin `admin@example.com` (password `admin-pass-123`).
+
+Anything in `backend/.env` overrides these defaults. For a real database, set `MONGO_URL`
+to a MongoDB connection string (local MongoDB, or a free MongoDB Atlas cluster).
+
+**Frontend** (http://localhost:8081)
 
 ```bash
 cd frontend
 yarn install
-EXPO_PUBLIC_BACKEND_URL=http://localhost:8001 npx expo start
+npx expo start          # then press w for web, or scan the QR code with Expo Go
 ```
+
+`frontend/.env.development` already points the app at the local API.
+
+## Deploying
+
+The API is a standard FastAPI app, `uvicorn server:app --host 0.0.0.0 --port 8001`, and runs on
+any host that runs Python: a VPS, Render, Railway, Fly.io, AWS and so on. In production set at least:
+
+- `MONGO_URL`: a real MongoDB, e.g. MongoDB Atlas. The `memory://` dev database isn't for production.
+- `JWT_SECRET`, `ADMIN_EMAIL` / `ADMIN_INITIAL_PASSWORD`, `PUBLIC_WEB_URL` / `CORS_ORIGINS`.
+- Storage and email, as described above.
+
+Build the web app with `npx expo export --platform web` (static files in `frontend/dist`, served
+by any static host) and the phone apps with `npx eas build`. Set `EXPO_PUBLIC_BACKEND_URL` to
+your API's public address for both.
 
 ## Tests
 

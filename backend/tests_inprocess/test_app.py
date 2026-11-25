@@ -318,3 +318,27 @@ def test_mock_confirm_can_be_switched_off(client, make_user, sofia, monkeypatch)
     r = book(client, parent, sofia["profile"]["id"], date=(datetime.now(timezone.utc) + timedelta(days=13)).date().isoformat(), time="10:00")
     monkeypatch.setenv("ENABLE_MOCK_CONFIRM", "false")
     assert client.post(f"/api/bookings/{r.json()['id']}/confirm-mock", headers=parent["h"]).status_code == 410
+
+
+# ---- Local dev database (MONGO_URL=memory://…) ----
+def test_dev_database_survives_a_restart(tmp_path):
+    import asyncio
+
+    import devdb
+    from mongomock_motor import AsyncMongoMockClient
+
+    snap = devdb.snapshot_path(f"memory://{tmp_path / 'dev-db.json'}")
+    assert devdb.snapshot_path("memory://") is None
+
+    async def scenario():
+        first = AsyncMongoMockClient()["dev"]
+        await first.users.insert_one({"id": "u1", "email": "a@example.com", "when": datetime.now(timezone.utc)})
+        await first.bookings.insert_many([{"id": "b1"}, {"id": "b2"}])
+        await devdb.save(first, snap)
+        second = AsyncMongoMockClient()["dev"]  # a fresh process
+        loaded = await devdb.load(second, snap)
+        return loaded, await second.users.find_one({"id": "u1"}, {"_id": 0}), await second.bookings.count_documents({})
+
+    loaded, user, n = asyncio.run(scenario())
+    assert loaded == 3 and n == 2 and user["email"] == "a@example.com"
+    assert isinstance(user["when"], datetime)

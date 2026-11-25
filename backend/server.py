@@ -28,6 +28,13 @@ _migrate_w9_tins = migrate_w9_tins  # old name, used by the W-9 tests
 async def lifespan(app: FastAPI):
     from routes import blocks as blocks_routes, blog as blog_routes
 
+    snapshot = None
+    if core.DEV_DATABASE:
+        import devdb
+
+        snapshot = devdb.snapshot_path(core.MONGO_URL)
+        await devdb.load(db, snapshot)
+        logger.warning(f"Using the local dev database ({snapshot or 'memory only'}) — not for production")
     await ensure_indexes()
     await backfill_slot_keys()
     problem = await run_in_threadpool(storage.check)
@@ -41,9 +48,13 @@ async def lifespan(app: FastAPI):
     tasks = []
     if os.environ.get("DISABLE_BACKGROUND_WORKERS", "").lower() != "true":
         tasks = [asyncio.create_task(blocks_routes.email_outbox_worker()), asyncio.create_task(maintenance_loop())]
+    if snapshot:
+        tasks.append(asyncio.create_task(devdb.autosave_loop(db, snapshot)))
     yield
     for t in tasks:
         t.cancel()
+    if snapshot:
+        await devdb.save(db, snapshot)
     client.close()
 
 

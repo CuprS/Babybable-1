@@ -69,9 +69,13 @@ android-sdk/
 .env.*
 *.env
 !.env.example
+!frontend/.env.development
 credentials.json
 *.key
 .credentials
 
 # Local file storage (STORAGE_BACKEND=local)
 backend/data/
+
+# Local portable tools (e.g. Node)
+.tools/
