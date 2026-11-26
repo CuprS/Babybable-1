@@ -1,10 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView, Linking, Image } from "react-native";
+import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView, Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { theme } from "./theme";
 import { useAuth } from "./auth";
+import { BrandLink } from "./brand";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const DRAWER_W = Math.min(SCREEN_W * 0.82, 360);
@@ -69,11 +70,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
       >
         <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
           <View style={styles.header}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              {/* Replace frontend/assets/images/babybabel-icon.png with your own icon PNG. */}
-              <Image source={require("../assets/images/babybabel-icon.png")} style={{ width: 28, height: 28, borderRadius: 6 }} />
-              <Text style={styles.logo}>Babybabel</Text>
-            </View>
+            <BrandLink tone="brand" size={28} onPress={close} testID="drawer-brand-home" />
             <Pressable onPress={close} testID="drawer-close" hitSlop={12}>
               <Feather name="x" size={22} color={theme.color.onSurface} />
             </Pressable>
@@ -141,7 +138,6 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 4, height: 0 }, elevation: 12,
   },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.xl, paddingVertical: theme.space.md, borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth },
-  logo: { fontSize: 22, fontWeight: "700", color: theme.color.brand, letterSpacing: -0.5 },
   item: { flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, paddingVertical: theme.space.lg },
   itemText: { flex: 1, fontSize: theme.font.lg, color: theme.color.onSurface, fontWeight: "500" },
   footer: { borderTopColor: theme.color.border, borderTopWidth: StyleSheet.hairlineWidth, padding: theme.space.xl, gap: theme.space.md },
