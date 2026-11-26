@@ -6,6 +6,7 @@ import { Button } from "@/src/ui";
 import { theme } from "@/src/theme";
 import { MenuButton } from "@/src/drawer";
 import { BrandLink } from "@/src/brand";
+import { IntroVideo } from "@/src/introVideo";
 
 const HERO = "https://images.unsplash.com/photo-1583468982228-19f19164aee2?crop=entropy&cs=srgb&fm=jpg&q=85&w=1200";
 
@@ -14,6 +15,7 @@ export default function Onboarding() {
   return (
     <View style={styles.root} testID="onboarding-screen">
       <ImageBackground source={{ uri: HERO }} style={StyleSheet.absoluteFill as any} resizeMode="cover" />
+      <IntroVideo />
       <LinearGradient
         colors={["rgba(44,36,33,0.05)", "rgba(44,36,33,0.55)", "rgba(44,36,33,0.92)"]}
         style={StyleSheet.absoluteFill}
