@@ -19,7 +19,8 @@ interface Stats {
   messages: number; reviews: number; favorites: number; events: number;
   platform_earnings_cents?: number; platform_earnings_count?: number;
 }
-interface EventRow { user_id: string; user_name?: string; role: string; name: string; props: any; at: string }
+// Usage events are anonymous: no user id or name is stored (see backend/routes/parents.py).
+interface EventRow { role: string; name: string; props: any; at: string }
 interface EventBucket { name: string; count: number }
 interface Earning { id: string; booking_id: string; parent_id?: string; tutor_id?: string; amount_cents: number; at: string }
 interface W9Row {
@@ -198,7 +199,7 @@ export default function Admin() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.eventName}>{e.name}</Text>
                   <Text style={styles.eventMeta}>
-                    {(e.user_name || "?")}  ·  {e.role}  ·  {new Date(e.at).toLocaleString()}
+                    {e.role}  ·  {new Date(e.at).toLocaleString()}
                   </Text>
                   {e.props && Object.keys(e.props).length > 0 && (
                     <Text style={styles.eventProps} numberOfLines={2}>{JSON.stringify(e.props)}</Text>

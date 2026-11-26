@@ -1,0 +1,14 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+.env
+.env.*
+!.env.example
+data/
+tests/
+tests_inprocess/
+pytest.ini
+requirements-dev.txt
+run_dev.py
+devdb.py

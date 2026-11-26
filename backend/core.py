@@ -59,6 +59,11 @@ TUTOR_RESPONSE_HOURS = int(os.environ.get("TUTOR_RESPONSE_HOURS", "24"))
 PENDING_PAYMENT_MINUTES = int(os.environ.get("PENDING_PAYMENT_MINUTES", "30"))
 # US payers must keep W-9s for 4 years after the last return they relate to.
 W9_RETENTION_DAYS = int(os.environ.get("W9_RETENTION_DAYS", str(4 * 365)))
+# Data minimisation: how long short-lived records are kept before automatic deletion.
+NOTIFICATION_RETENTION_DAYS = int(os.environ.get("NOTIFICATION_RETENTION_DAYS", "90"))
+EVENT_RETENTION_DAYS = int(os.environ.get("EVENT_RETENTION_DAYS", "90"))
+PUSH_TOKEN_RETENTION_DAYS = int(os.environ.get("PUSH_TOKEN_RETENTION_DAYS", "180"))
+ORPHAN_UPLOAD_HOURS = int(os.environ.get("ORPHAN_UPLOAD_HOURS", "24"))
 
 
 # MONGO_URL=memory://data/dev-db.json runs a local, file-backed stand-in (see devdb.py) so the

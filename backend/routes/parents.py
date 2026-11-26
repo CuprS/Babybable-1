@@ -87,11 +87,29 @@ async def get_parent_public(user_id: str, u: dict = Depends(current_user)):
     return parent_doc_to_model(parent, fresh["name"])
 
 
+def anonymous_props(props: Optional[dict]) -> dict:
+    """Keep usage stats anonymous and small: no ids (they'd link people and bookings), only
+    short plain values like a language, a rating or a result count."""
+    out: dict = {}
+    for key, value in (props or {}).items():
+        k = str(key)[:40]
+        if k == "id" or k.endswith("_id") or k.endswith("Id") or "email" in k.lower() or "name" in k.lower():
+            continue
+        if isinstance(value, bool) or value is None or (isinstance(value, (int, float)) and abs(value) < 1e9):
+            out[k] = value
+        elif isinstance(value, str) and len(value) <= 40:
+            out[k] = value
+        if len(out) >= 10:
+            break
+    return out
+
+
 @router.post("/events")
 async def track_event(body: EventIn, u: dict = Depends(current_user)):
+    # Deliberately NOT stored: who did it (user id / name). Deleted automatically after
+    # EVENT_RETENTION_DAYS by the maintenance worker.
     await db.events.insert_one({
-        "user_id": u["id"], "role": u["role"], "user_name": u["name"], "name": body.name,
-        "props": body.props or {}, "at": now_iso(),
+        "role": u["role"], "name": body.name, "props": anonymous_props(body.props), "at": now_iso(),
     })
     return {"ok": True}
 

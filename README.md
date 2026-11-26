@@ -79,6 +79,21 @@ Either way, set `EMAIL_FROM` to a sender your provider has verified, e.g. `Babyb
 With no provider set, nothing is sent and the server logs a warning. For local development,
 `DEV_LOG_EMAIL_CODES=true` prints the 6-digit codes to the log instead.
 
+## Keeping data minimal
+
+The app stores only what it needs, in one MongoDB database, and deletes the rest automatically
+(hourly, in `workers.py`):
+
+| What | Kept for | Setting |
+| --- | --- | --- |
+| Usage stats (anonymous: no user id, name or other ids) | 90 days | `EVENT_RETENTION_DAYS` |
+| Notifications | 90 days | `NOTIFICATION_RETENTION_DAYS` |
+| Push tokens not refreshed | 180 days | `PUSH_TOKEN_RETENTION_DAYS` |
+| Uploaded files nothing uses (replaced photos, abandoned uploads) | 24 hours | `ORPHAN_UPLOAD_HOURS` |
+| Verification / reset codes | until they expire (15 min) | |
+| Emails that could never be delivered | after 30 attempts | |
+| W-9s of deleted tutors | 4 years (legal requirement) | `W9_RETENTION_DAYS` |
+
 ## Push notifications
 
 The app registers each phone with Expo's push service after sign-in. The server sends a push
@@ -139,6 +154,9 @@ and sets `EXPO_PUBLIC_WEB_URL`, the web-app address used by "Open the web app" i
 
 ## Deploying
 
+**Step-by-step for a Hetzner server (Docker Compose, automatic HTTPS, nightly backups): see
+[`deploy/README.md`](deploy/README.md).** The notes below apply to any host.
+
 The API is a standard FastAPI app, `uvicorn server:app --host 0.0.0.0 --port 8001`, and runs on
 any host that runs Python: a VPS, Render, Railway, Fly.io, AWS and so on. In production set at least:
 
@@ -171,8 +189,9 @@ workflow" → tick *integration*).
 
 ## Before going live
 
-- `ENABLE_MOCK_CONFIRM=false` (otherwise anyone can mark a booking paid), and set
-  `STRIPE_API_KEY` + `STRIPE_WEBHOOK_SECRET`.
+- Payments use Stripe and are **mocked for now** (`ENABLE_MOCK_CONFIRM=true`, Stripe keys empty):
+  no card is charged and anyone can mark their own booking paid, so treat it as a pilot. When
+  real payments are built, set `STRIPE_API_KEY` + `STRIPE_WEBHOOK_SECRET` and `ENABLE_MOCK_CONFIRM=false`.
 - Leave `SEED_TUTOR_PASSWORD` empty. On a database created before this change, reset the
   passwords of `sofia@babybabel.dev` / `marie@babybabel.dev` (they used `password123`), or delete them.
 - Set `W9_ENCRYPTION_KEYS`; without it W-9 TINs are encrypted with a key that is lost on restart.

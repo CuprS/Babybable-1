@@ -374,3 +374,39 @@ def test_sample_tutors_only_on_request(db_call):
         os.environ["SEED_SAMPLE_TUTORS"] = "true"
         db_call(seed.seed_data)
     assert db_call(core.db.users.count_documents, {"email": {"$regex": r"@babybabel\.dev$"}}) == 2
+
+
+# ---- Keeping data minimal ----
+def test_usage_events_are_anonymous(client, make_user, db_call):
+    u = make_user()
+    marker = f"evt-{uuid.uuid4().hex[:6]}"
+    client.post("/api/events", headers=u["h"], json={"name": marker, "props": {
+        "tutor_id": "t1", "conversation_id": "u2", "booking_id": "b1", "email": "x@y.z", "user_name": "Pat",
+        "language": "Spanish", "rating": 5, "has_comment": True, "long": "x" * 200}})
+    ev = db_call(core.db.events.find_one, {"name": marker}, {"_id": 0})
+    assert "user_id" not in ev and "user_name" not in ev
+    assert ev["props"] == {"language": "Spanish", "rating": 5, "has_comment": True}
+
+
+def test_old_and_unused_data_is_deleted(client, make_user, db_call):
+    u = make_user()
+    old = (datetime.now(timezone.utc) - timedelta(days=200)).isoformat()
+    db_call(core.db.notifications.insert_one, {"id": "n-old", "user_id": u["user"]["id"], "kind": "chat", "title": "t", "body": "b", "read": False, "at": old})
+    db_call(core.db.events.insert_one, {"name": "old-evt", "role": "parent", "props": {}, "at": old})
+    db_call(core.db.push_tokens.insert_one, {"token": "ExponentPushToken[old]", "user_id": u["user"]["id"], "updated_at": old})
+    db_call(core.db.auth_codes.insert_one, {"user_id": "x", "purpose": "reset", "code_hash": "h", "attempts": 0, "expires_at": old})
+    # Two uploads: one used as the avatar, one abandoned. Both "old enough".
+    keep = client.post("/api/uploads", headers=u["h"], files={"file": ("a.png", b"keep", "image/png")}).json()["path"]
+    drop = client.post("/api/uploads", headers=u["h"], files={"file": ("b.png", b"drop", "image/png")}).json()["path"]
+    client.patch("/api/auth/me", headers=u["h"], json={"avatar_url": keep})
+    db_call(core.db.uploads.update_many, {"path": {"$in": [keep, drop]}}, {"$set": {"created_at": old}})
+
+    counts = db_call(workers.purge_short_lived_records)
+    removed = db_call(workers.purge_orphan_uploads)
+
+    assert counts["notifications"] >= 1 and counts["events"] >= 1 and counts["push_tokens"] >= 1 and counts["auth_codes"] >= 1
+    assert removed >= 1
+    assert db_call(core.db.uploads.find_one, {"path": keep}, {"_id": 1}) is not None
+    assert db_call(core.db.uploads.find_one, {"path": drop}, {"_id": 1}) is None
+    assert client.get(f"/api/files/{keep}").status_code == 200
+    assert client.get(f"/api/files/{drop}").status_code == 404

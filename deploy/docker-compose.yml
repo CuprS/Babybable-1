@@ -1,0 +1,72 @@
+# Babybabel on one server:  docker compose -f deploy/docker-compose.yml up -d --build
+# Settings and secrets live in deploy/.env (created by deploy/setup.sh from .env.example).
+name: babybabel
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    # Keep the database lean: a 256 MB cache is plenty for Babybabel's data and leaves the
+    # rest of a small server for the API and the website.
+    command: ["--wiredTigerCacheSizeGB", "0.25", "--quiet"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in deploy/.env}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?set MONGO_APP_PASSWORD in deploy/.env}
+    volumes:
+      - mongo-data:/data/db
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
+    # No "ports": the database is only reachable by the other containers, never from the internet.
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  api:
+    build: ../backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      MONGO_URL: mongodb://babybabel:${MONGO_APP_PASSWORD}@mongo:27017/babybabel?authSource=babybabel
+      DB_NAME: babybabel
+      PUBLIC_WEB_URL: https://${DOMAIN}
+      CORS_ORIGINS: https://${DOMAIN}
+      CORS_ORIGIN_REGEX: "^$"  # no local-development origins in production
+    volumes:
+      - uploads:/app/data   # used when STORAGE_BACKEND=local
+    depends_on:
+      mongo:
+        condition: service_healthy
+    logging: *logging
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+      args:
+        PUBLIC_URL: https://${DOMAIN:?set DOMAIN in deploy/.env}
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - caddy-data:/data      # HTTPS certificates — keep this volume
+      - caddy-config:/config
+    depends_on:
+      - api
+    logging: *logging
+
+volumes:
+  mongo-data:
+  uploads:
+  caddy-data:
+  caddy-config:

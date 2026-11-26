@@ -6,9 +6,13 @@ several instances at once is safe (just redundant).
 import asyncio
 from datetime import datetime, timedelta
 
+from starlette.concurrency import run_in_threadpool
+
+import storage
 from booking_service import cancel_booking
 from core import (
-    PENDING_PAYMENT_MINUTES, booking_end_utc, booking_start_utc, db, logger, notify_once, now_utc, zone,
+    EVENT_RETENTION_DAYS, NOTIFICATION_RETENTION_DAYS, ORPHAN_UPLOAD_HOURS, PENDING_PAYMENT_MINUTES,
+    PUSH_TOKEN_RETENTION_DAYS, booking_end_utc, booking_start_utc, db, logger, notify_once, now_utc, zone,
     tutor_has_completed_session, tutor_user_id,
 )
 
@@ -96,8 +100,84 @@ async def send_due_reminders() -> None:
         await _booking_notifications(b, now)
 
 
+# ---- Data minimisation: delete what's no longer needed ----
+def _ago(**kw) -> str:
+    return (now_utc() - timedelta(**kw)).isoformat()
+
+
+async def purge_short_lived_records() -> dict:
+    """Expired one-time codes, old notifications and usage stats, dead push tokens and
+    emails that could never be delivered."""
+    now = now_utc().isoformat()
+    counts = {
+        "auth_codes": (await db.auth_codes.delete_many({"expires_at": {"$lt": now}})).deleted_count,
+        "notifications": (await db.notifications.delete_many({"at": {"$lt": _ago(days=NOTIFICATION_RETENTION_DAYS)}})).deleted_count,
+        "events": (await db.events.delete_many({"at": {"$lt": _ago(days=EVENT_RETENTION_DAYS)}})).deleted_count,
+        "push_tokens": (await db.push_tokens.delete_many({"updated_at": {"$lt": _ago(days=PUSH_TOKEN_RETENTION_DAYS)}})).deleted_count,
+        "email_outbox": (await db.email_outbox.delete_many({"attempts": {"$gte": 30}})).deleted_count,
+    }
+    if any(counts.values()):
+        logger.info(f"data clean-up: {counts}")
+    return counts
+
+
+async def _referenced_upload_paths() -> set:
+    """Every stored file something still points at."""
+    refs: set = set()
+    async for u in db.users.find({"avatar_url": {"$nin": [None, ""]}}, {"_id": 0, "avatar_url": 1}):
+        refs.add(u["avatar_url"])
+    tutor_fields = ("avatar_url", "hero_image_url", "accreditation_photo_url", "accreditation_document_url",
+                    "id_document_url", "background_check_url")
+    async for t in db.tutors.find({}, {"_id": 0, **{f: 1 for f in tutor_fields}, "accreditation_urls": 1}):
+        refs.update(t.get(f) for f in tutor_fields if t.get(f))
+        refs.update(t.get("accreditation_urls") or [])
+    async for p in db.parents.find({}, {"_id": 0, "avatar_url": 1, "children.avatar_url": 1}):
+        if p.get("avatar_url"):
+            refs.add(p["avatar_url"])
+        refs.update(c.get("avatar_url") for c in p.get("children") or [] if c.get("avatar_url"))
+    async for post in db.posts.find({}, {"_id": 0, "cover_image_url": 1, "image_urls": 1}):
+        if post.get("cover_image_url"):
+            refs.add(post["cover_image_url"])
+        refs.update(post.get("image_urls") or [])
+    return {r.split("/api/files/", 1)[-1] for r in refs if isinstance(r, str)}
+
+
+async def purge_orphan_uploads() -> int:
+    """Files nobody references any more (a replaced photo, an abandoned upload) are deleted
+    once they're older than ORPHAN_UPLOAD_HOURS — enough time to finish saving a form."""
+    cutoff = _ago(hours=ORPHAN_UPLOAD_HOURS)
+    candidates = await db.uploads.find({"created_at": {"$lt": cutoff}}, {"_id": 0, "path": 1}).to_list(5000)
+    if not candidates:
+        return 0
+    refs = await _referenced_upload_paths()
+    removed = 0
+    for c in candidates:
+        if c["path"] in refs:
+            continue
+        await run_in_threadpool(storage.delete_object, c["path"])
+        await db.uploads.delete_one({"path": c["path"]})
+        removed += 1
+    if removed:
+        logger.info(f"data clean-up: removed {removed} unused uploaded file(s)")
+    return removed
+
+
+_last_hourly = 0.0
+
+
+async def hourly_jobs() -> None:
+    global _last_hourly
+    now = now_utc().timestamp()
+    if now - _last_hourly < 3600:
+        return
+    _last_hourly = now
+    await purge_short_lived_records()
+    await purge_orphan_uploads()
+    await purge_expired_w9s()
+
+
 async def run_once() -> None:
-    for job in (expire_unpaid_bookings, expire_unanswered_requests, send_due_reminders, purge_expired_w9s):
+    for job in (expire_unpaid_bookings, expire_unanswered_requests, send_due_reminders, hourly_jobs):
         try:
             await job()
         except Exception as e:

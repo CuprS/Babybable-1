@@ -41,6 +41,11 @@ export default function Privacy() {
           body: "Only the services we need to run the app: our hosting and file storage, Stripe for payments, our email provider for codes and alerts, and Expo for push notifications. We don't sell data and don't use advertising trackers.",
         },
         {
+          icon: "clock",
+          title: "What we delete automatically",
+          body: "Notifications after 90 days; anonymous usage statistics (which never record who you are) after 90 days; photos and files you've replaced or no longer use within a day; sign-in codes as soon as they expire.",
+        },
+        {
           icon: "trash-2",
           title: "Deleting your account",
           body: "Delete your account any time in Profile. Your profile, messages, photos and documents are removed and upcoming sessions are cancelled. We keep records of past paid sessions without your name, for accounting, and US tutors' W-9 forms for 4 years because the law requires it.",

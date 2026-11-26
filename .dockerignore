@@ -1,0 +1,15 @@
+# Context for deploy/web.Dockerfile (repository root). Keep it small and secret-free.
+.git/
+.github/
+.tools/
+**/node_modules/
+**/.expo/
+**/.metro-cache/
+frontend/dist/
+backend/
+deploy/.env
+deploy/backups/
+**/.env
+**/.env.*
+!**/.env.example
+memory/

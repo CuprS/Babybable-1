@@ -1,0 +1,7 @@
+# Shell scripts and server config run on Linux: always store them with LF line endings.
+*.sh text eol=lf
+deploy/Caddyfile text eol=lf
+deploy/*.yml text eol=lf
+deploy/.env.example text eol=lf
+**/Dockerfile text eol=lf
+*.Dockerfile text eol=lf

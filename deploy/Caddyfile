@@ -1,0 +1,47 @@
+# Caddy: automatic HTTPS (Let's Encrypt), the static website, and /api → the API container.
+# DOMAIN and ACME_EMAIL come from deploy/.env via docker-compose.yml.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(self)"
+		-Server
+	}
+
+	# Uploads are capped at 10 MB by the API; allow a little headroom for form encoding.
+	request_body {
+		max_size 12MB
+	}
+
+	handle /api/* {
+		reverse_proxy api:8001
+	}
+
+	handle {
+		root * /srv/web
+
+		# Fingerprinted build files never change: cache them for a year.
+		@immutable path /_expo/static/* /assets/*
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+		# The app shell must always be fresh so new deploys show up immediately.
+		@shell path / /index.html
+		header @shell Cache-Control "no-cache"
+
+		# Single-page app: unknown paths load index.html and the app shows the right screen.
+		try_files {path} {path}.html /index.html
+		file_server
+	}
+}
+
+# Optional: send www.yourdomain to yourdomain (needs a DNS record for www too).
+# www.{$DOMAIN} {
+# 	redir https://{$DOMAIN}{uri} permanent
+# }
