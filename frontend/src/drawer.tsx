@@ -1,11 +1,12 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Animated, Dimensions, Platform, ScrollView, Linking } from "react-native";
+import { View, Text, StyleSheet, Pressable, Animated, Dimensions, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { theme } from "./theme";
 import { useAuth } from "./auth";
 import { BrandLink } from "./brand";
+import { SiteFooter } from "./footer";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 const DRAWER_W = Math.min(SCREEN_W * 0.82, 360);
@@ -89,22 +90,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
               </Pressable>
             ))}
           </ScrollView>
-          <View style={styles.footer}>
-            {Platform.OS === "web" && (
-              <Pressable
-                onPress={() => Linking.openURL("https://expo.dev/")}
-                style={styles.download}
-                testID="drawer-download-app"
-              >
-                <Feather name="download" size={18} color={theme.color.brand} />
-                <Text style={styles.downloadText}>Download the app</Text>
-              </Pressable>
-            )}
-            <Pressable onPress={() => go("/privacy")} testID="drawer-privacy">
-              <Text style={styles.privacy}>Privacy Policy</Text>
-            </Pressable>
-            <Text style={styles.tag}>© Babybabel · Care in every language</Text>
-          </View>
+          <SiteFooter onNavigate={close} />
         </SafeAreaView>
       </Animated.View>
     </Ctx.Provider>
@@ -140,9 +126,4 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.xl, paddingVertical: theme.space.md, borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth },
   item: { flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingHorizontal: theme.space.xl, paddingVertical: theme.space.lg },
   itemText: { flex: 1, fontSize: theme.font.lg, color: theme.color.onSurface, fontWeight: "500" },
-  footer: { borderTopColor: theme.color.border, borderTopWidth: StyleSheet.hairlineWidth, padding: theme.space.xl, gap: theme.space.md },
-  download: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, backgroundColor: theme.color.brandSoft, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm, borderRadius: theme.radius.pill, alignSelf: "flex-start" },
-  downloadText: { color: theme.color.brandDark, fontWeight: "700" },
-  privacy: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.base, fontWeight: "600", textDecorationLine: "underline" },
-  tag: { color: theme.color.muted, fontSize: 12 },
 });

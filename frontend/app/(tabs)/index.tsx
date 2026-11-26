@@ -6,7 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import Slider from "@react-native-community/slider";
-import { apiFetch, Booking, fileUrl, Tutor } from "@/src/api";
+import { apiFetch, Booking, fileUrl, MyVerification, Tutor } from "@/src/api";
 import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
 import { Chip, VerifiedBadge } from "@/src/ui";
@@ -31,7 +31,6 @@ export default function Explore() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [maxMilesIdx, setMaxMilesIdx] = useState<number>(-1); // -1 means "Any distance"
   const [includeRemote, setIncludeRemote] = useState<boolean>(true);
-  const [verifiedOnly, setVerifiedOnly] = useState<boolean>(false);
   const [parentHasCoords, setParentHasCoords] = useState<boolean>(false);
   const [parentCity, setParentCity] = useState<string>("");
 
@@ -45,7 +44,6 @@ export default function Explore() {
       const params = new URLSearchParams();
       if (lang !== "All") params.set("language", lang);
       if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
-      if (verifiedOnly) params.set("verified_only", "true");
       if (maxMilesIdx >= 0 && parentHasCoords) {
         params.set("max_miles", String(DISTANCE_STEPS[maxMilesIdx]));
         params.set("include_remote", String(includeRemote));
@@ -69,7 +67,7 @@ export default function Explore() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [lang, debouncedQ, maxMilesIdx, includeRemote, parentHasCoords, verifiedOnly]);
+  }, [lang, debouncedQ, maxMilesIdx, includeRemote, parentHasCoords]);
 
   const loadFavs = useCallback(async () => {
     if (user?.role !== "parent") return;
@@ -146,7 +144,6 @@ export default function Explore() {
           contentContainerStyle={{ gap: theme.space.sm, paddingHorizontal: theme.space.xl }}
           style={styles.chipsRow}
         >
-          <Chip label="✔ Verified only" selected={verifiedOnly} onPress={() => setVerifiedOnly(!verifiedOnly)} testID="chip-verified" />
           {LANGUAGES.map((l) => (
             <Chip key={l} label={l === "All" ? "All" : `${flagFor(l)} ${l}`} selected={lang === l} onPress={() => setLang(l)} testID={`chip-${l.toLowerCase()}`} />
           ))}
@@ -326,8 +323,10 @@ function TutorHome() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [verification, setVerification] = useState<MyVerification | null>(null);
   useFocusEffect(useCallback(() => {
     apiFetch<Booking[]>("/bookings/me").then(setBookings).catch(() => {}).finally(() => setLoading(false));
+    apiFetch<MyVerification>("/tutors/me/verification").then(setVerification).catch(() => {});
   }, []));
   const paid = bookings.filter((b) => b.payment_status === "paid");
   // amount_cents is what the parent paid; the 1% platform fee isn't the tutor's money.
@@ -347,6 +346,23 @@ function TutorHome() {
       <ScrollView contentContainerStyle={{ padding: theme.space.xl, paddingBottom: theme.space["3xl"] }}>
         <Text style={{ fontSize: 28, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5 }}>Welcome, {firstName || "tutor"}</Text>
         <Text style={{ color: theme.color.onSurfaceSecondary, marginTop: theme.space.xs }}>Here&apos;s your day at a glance.</Text>
+
+        {verification && verification.status !== "verified" && (
+          <Pressable onPress={() => router.push("/verify-tutor")} style={dashStyles.verifyCard} testID="tutor-verify-banner" accessibilityRole="button">
+            <Feather name={verification.status === "pending" ? "clock" : "shield"} size={22} color={theme.color.brandDark} />
+            <View style={{ flex: 1 }}>
+              <Text style={dashStyles.verifyTitle}>
+                {verification.status === "pending" ? "Verification in review" : verification.status === "rejected" ? "Verification needs another look" : "Get verified to start teaching"}
+              </Text>
+              <Text style={dashStyles.verifyBody}>
+                {verification.status === "pending"
+                  ? "We're checking your documents (usually 1–2 working days). Families can find and book you once you're approved."
+                  : "Families can't find or book you until our team has checked your photo ID and background check."}
+              </Text>
+            </View>
+            {verification.status !== "pending" && <Feather name="chevron-right" size={20} color={theme.color.brandDark} />}
+          </Pressable>
+        )}
 
         <View style={dashStyles.grid}>
           <View style={dashStyles.metric} testID="tutor-earnings-card">
@@ -466,6 +482,9 @@ const dashStyles = StyleSheet.create({
   metricLabel: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm },
   section: { fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space["2xl"], marginBottom: theme.space.md },
   empty: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg, padding: theme.space.lg },
+  verifyCard: { flexDirection: "row", alignItems: "center", gap: theme.space.md, marginTop: theme.space.xl, padding: theme.space.lg, borderRadius: theme.radius.lg, backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand },
+  verifyTitle: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.brandDark },
+  verifyBody: { color: theme.color.brandDark, marginTop: 2, lineHeight: 20 },
   requestRow: { backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand, gap: theme.space.md },
   bookRow: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",

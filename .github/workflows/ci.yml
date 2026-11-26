@@ -63,6 +63,7 @@ jobs:
       DB_NAME: ci_integration
       JWT_SECRET: ci-only-secret-that-is-long-enough-1234567890
       SEED_TUTOR_PASSWORD: password123
+      SEED_SAMPLE_TUTORS: "true"
       ADMIN_EMAIL: admin@example.com
       ADMIN_INITIAL_PASSWORD: ci-admin-password
       EXPO_PUBLIC_BACKEND_URL: http://localhost:8001

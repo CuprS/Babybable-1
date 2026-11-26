@@ -12,9 +12,9 @@ import { useToast } from "@/src/toast";
 const DOC_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/heic"];
 
 const STATUS_COPY: Record<MyVerification["status"], { title: string; body: string; icon: any; color: string }> = {
-  none: { title: "Get the Verified badge", body: "Families are far more likely to book tutors who've had an identity and background check.", icon: "shield", color: theme.color.brandDark },
+  none: { title: "Verification is required", body: "Before families can find or book you, our team checks your photo ID and a recent background check. It usually takes 1–2 working days.", icon: "shield", color: theme.color.brandDark },
   pending: { title: "We're reviewing your documents", body: "This usually takes 1–2 working days. We'll notify you as soon as it's done.", icon: "clock", color: theme.color.warning },
-  verified: { title: "You're verified", body: "Families see a Verified badge on your profile and in search.", icon: "check-circle", color: theme.color.success },
+  verified: { title: "You're verified", body: "Families can now find and book you, and see a Verified badge on your profile.", icon: "check-circle", color: theme.color.success },
   rejected: { title: "Please take another look", body: "", icon: "alert-circle", color: theme.color.error },
 };
 

@@ -16,6 +16,9 @@ interface Props {
   height?: number;
   onPinPress?: (id: string) => void;
   testID?: string;
+  /** Closest zoom used to frame the pins (e.g. 11 for one city). Defaults to a wide view. */
+  zoom?: number;
+  title?: string;
 }
 
 /**
@@ -24,8 +27,8 @@ interface Props {
  * On web → renders the same HTML in a plain <iframe> so it works in the Metro preview too.
  * Works everywhere without an API key. Emits marker taps back to RN via postMessage.
  */
-export function LiveMap({ markers, height = 220, onPinPress, testID }: Props) {
-  const html = useMemo(() => buildHtml(markers), [markers]);
+export function LiveMap({ markers, height = 220, onPinPress, testID, zoom, title = "Map" }: Props) {
+  const html = useMemo(() => buildHtml(markers, zoom), [markers, zoom]);
 
   React.useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
@@ -48,7 +51,7 @@ export function LiveMap({ markers, height = 220, onPinPress, testID }: Props) {
           srcDoc={html}
           style={{ width: "100%", height: "100%", border: "0" }}
           sandbox="allow-scripts allow-same-origin"
-          title="Tutors map"
+          title={title}
         />
       </View>
     );
@@ -77,7 +80,7 @@ export function LiveMap({ markers, height = 220, onPinPress, testID }: Props) {
   );
 }
 
-function buildHtml(markers: LiveMapMarker[]): string {
+function buildHtml(markers: LiveMapMarker[], focusZoom?: number): string {
   const safe = markers
     .filter((m) => Number.isFinite(m.latitude) && Number.isFinite(m.longitude))
     .map((m) => ({
@@ -136,11 +139,14 @@ function buildHtml(markers: LiveMapMarker[]): string {
       window.parent.postMessage(payload, '*');
     }
   }
-  var map = L.map('map', { zoomControl: true, attributionControl: false })
+  // OpenStreetMap's tile policy requires visible attribution.
+  var map = L.map('map', { zoomControl: true, attributionControl: true })
     .setView([${initial.lat}, ${initial.lng}], ${zoom});
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
   }).addTo(map);
+  map.attributionControl.setPrefix(false);
   var pins = ${JSON.stringify(safe)};
   var bounds = [];
   pins.forEach(function(p){
@@ -155,9 +161,9 @@ function buildHtml(markers: LiveMapMarker[]): string {
     bounds.push([p.lat, p.lng]);
   });
   if (bounds.length > 1) {
-    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 5 });
+    map.fitBounds(bounds, { padding: [30, 30], maxZoom: ${focusZoom ?? 5} });
   } else if (bounds.length === 1) {
-    map.setView(bounds[0], 4);
+    map.setView(bounds[0], ${focusZoom ?? 4});
   }
 </script>
 </body></html>`;

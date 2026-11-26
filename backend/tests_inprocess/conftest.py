@@ -14,7 +14,7 @@ BACKEND = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BACKEND))
 os.environ.update({
     "MONGO_URL": "mongodb://in-memory", "DB_NAME": f"test_{uuid.uuid4().hex[:8]}",
-    "JWT_SECRET": "t" * 48, "SEED_TUTOR_PASSWORD": "password123",
+    "JWT_SECRET": "t" * 48, "SEED_TUTOR_PASSWORD": "password123", "SEED_SAMPLE_TUTORS": "true",
     "DISABLE_BACKGROUND_WORKERS": "true", "PUSH_ENABLED": "false", "ENABLE_MOCK_CONFIRM": "true",
     "STRIPE_API_KEY": "", "EMAIL_PROVIDER": "",
     # Real local-folder storage in a throwaway directory.

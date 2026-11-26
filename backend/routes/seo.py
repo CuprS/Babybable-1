@@ -51,7 +51,7 @@ img{{max-width:100%;border-radius:16px}}</style>
 
 @router.get("/share/tutor/{tutor_id}", response_class=HTMLResponse)
 async def share_tutor(tutor_id: str):
-    t = await db.tutors.find_one({"id": tutor_id, "suspended": {"$ne": True}}, {"_id": 0})
+    t = await db.tutors.find_one({"id": tutor_id, "suspended": {"$ne": True}, "verification_status": "verified"}, {"_id": 0})
     if not t:
         raise HTTPException(404, "Tutor not found")
     langs = ", ".join(t.get("languages") or []) or "languages"
@@ -83,7 +83,7 @@ async def share_post(post_id: str):
 @router.get("/seo/sitemap.xml")
 async def sitemap():
     urls = [_abs(path) for path in ("/find-tutor", "/become-tutor", "/blog", "/mission", "/languages-near-you", "/support", "/privacy")]
-    async for t in db.tutors.find({"suspended": {"$ne": True}, "bio": {"$nin": [None, ""]}}, {"_id": 0, "id": 1}):
+    async for t in db.tutors.find({"suspended": {"$ne": True}, "verification_status": "verified", "bio": {"$nin": [None, ""]}}, {"_id": 0, "id": 1}):
         urls.append(_abs(f"/api/share/tutor/{t['id']}"))
     async for p in db.posts.find({"status": "published"}, {"_id": 0, "id": 1}):
         urls.append(_abs(f"/api/share/blog/{p['id']}"))

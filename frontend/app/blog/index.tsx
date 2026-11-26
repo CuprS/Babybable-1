@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Linking, ActivityIndicator, RefreshControl } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
 import { Feather } from "@expo/vector-icons";
@@ -9,6 +9,7 @@ import { MenuButton } from "@/src/drawer";
 import { useAuth } from "@/src/auth";
 import { apiFetch, fileUrl, BlogPost } from "@/src/api";
 import { Chip } from "@/src/ui";
+import { SiteFooter } from "@/src/footer";
 
 export default function Blog() {
   const router = useRouter();
@@ -106,15 +107,7 @@ export default function Blog() {
           </View>
         )}
 
-        <View style={styles.footer}>
-          {Platform.OS === "web" && (
-            <Pressable onPress={() => Linking.openURL("https://expo.dev/")} style={styles.download} testID="blog-download">
-              <Feather name="download" size={16} color={theme.color.brand} />
-              <Text style={styles.downloadText}>Download the app</Text>
-            </Pressable>
-          )}
-          <Pressable onPress={() => router.push("/privacy")}><Text style={styles.privacy}>Privacy Policy</Text></Pressable>
-        </View>
+        <SiteFooter />
       </ScrollView>
     </View>
   );
@@ -139,8 +132,4 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space.xs, lineHeight: 26 },
   excerpt: { color: theme.color.onSurfaceSecondary, marginTop: theme.space.sm, lineHeight: 20 },
   read: { color: theme.color.muted, marginTop: theme.space.md, fontSize: 12 },
-  footer: { paddingTop: theme.space.xl, marginTop: theme.space.xl, borderTopColor: theme.color.border, borderTopWidth: StyleSheet.hairlineWidth, gap: theme.space.md },
-  download: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, backgroundColor: theme.color.brandSoft, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm, borderRadius: theme.radius.pill, alignSelf: "flex-start" },
-  downloadText: { color: theme.color.brandDark, fontWeight: "700" },
-  privacy: { color: theme.color.onSurfaceSecondary, fontWeight: "600", textDecorationLine: "underline" },
 });

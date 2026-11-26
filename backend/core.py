@@ -592,3 +592,13 @@ async def notify_admins(kind: str, title: str, body: str) -> None:
 
 def today_in(tz_name: Optional[str]) -> date_cls:
     return now_utc().astimezone(zone(tz_name)).date()
+
+
+# ---- Tutor verification (required before anyone can book a tutor) ----
+NOT_VERIFIED_MSG = "This tutor hasn't finished identity and background verification yet, so they can't take bookings."
+TUTOR_NOT_VERIFIED_MSG = ("Finish identity and background verification before offering lessons "
+                          "(Profile → Identity & background check). Our team reviews it within 1–2 working days.")
+
+
+def is_tutor_verified(t: Optional[dict]) -> bool:
+    return bool(t) and t.get("verification_status") == "verified"

@@ -1,9 +1,10 @@
-import React from "react";
-import { View, Text, StyleSheet, Pressable } from "react-native";
-import { Image } from "expo-image";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { theme } from "./theme";
+import { LiveMap, LiveMapMarker } from "./livemap";
 
+// A small location map for profiles. It used to load a picture from staticmap.openstreetmap.de,
+// which no longer responds; it now draws the same pins with the live OpenStreetMap map.
 export interface MapMarker { latitude: number; longitude: number; label?: string; color?: "red" | "orange" | "blue" | "green" }
 
 interface Props {
@@ -18,17 +19,12 @@ interface Props {
   onPress?: () => void;
 }
 
-/**
- * Static map card powered by OpenStreetMap staticmap.
- * Works everywhere (web preview, Expo Go, native builds) without needing an API key.
- * Falls back to a friendly "no location" card when coords are missing.
- */
-export function StaticMap({ latitude, longitude, markers, zoom = 11, height = 200, width = 600, caption, testID, onPress }: Props) {
-  const allMarkers = markers && markers.length
+export function StaticMap({ latitude, longitude, markers, zoom = 11, height = 200, caption, testID, onPress }: Props) {
+  const points: MapMarker[] = markers && markers.length
     ? markers
-    : (latitude != null && longitude != null ? [{ latitude, longitude, color: "red" as const }] : []);
+    : (latitude != null && longitude != null ? [{ latitude, longitude }] : []);
 
-  if (allMarkers.length === 0) {
+  if (points.length === 0) {
     return (
       <View style={[styles.card, { height }]} testID={testID}>
         <Feather name="map-pin" size={26} color={theme.color.muted} />
@@ -37,26 +33,19 @@ export function StaticMap({ latitude, longitude, markers, zoom = 11, height = 20
     );
   }
 
-  const center = latitude != null && longitude != null
-    ? { latitude, longitude }
-    : { latitude: allMarkers.reduce((s, m) => s + m.latitude, 0) / allMarkers.length,
-        longitude: allMarkers.reduce((s, m) => s + m.longitude, 0) / allMarkers.length };
-
-  const markerStr = allMarkers
-    .slice(0, 25)
-    .map((m) => `${m.latitude},${m.longitude},${m.color || "red"}-pushpin`)
-    .join("|");
-  const url = `https://staticmap.openstreetmap.de/staticmap.php?center=${center.latitude},${center.longitude}&zoom=${zoom}&size=${width}x${Math.round(height * 2)}&maptype=mapnik&markers=${markerStr}`;
+  const pins: LiveMapMarker[] = points.slice(0, 25).map((m, i) => ({
+    id: String(i), latitude: m.latitude, longitude: m.longitude, label: m.label || caption || "Here",
+  }));
 
   const inner = (
-    <View style={[styles.mapWrap, { height }]} testID={testID}>
-      <Image source={{ uri: url }} style={StyleSheet.absoluteFill as any} contentFit="cover" transition={250} />
-      {caption && (
+    <View style={{ gap: theme.space.xs }} testID={testID}>
+      <LiveMap markers={pins} height={height} zoom={zoom} title={caption ? `Map: ${caption}` : "Map"} />
+      {caption ? (
         <View style={styles.caption}>
-          <Feather name="map-pin" size={14} color="#fff" />
+          <Feather name="map-pin" size={14} color={theme.color.brandDark} />
           <Text style={styles.captionText} numberOfLines={1}>{caption}</Text>
         </View>
-      )}
+      ) : null}
     </View>
   );
   return onPress ? <Pressable onPress={onPress}>{inner}</Pressable> : inner;
@@ -68,15 +57,6 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", gap: 6,
   },
   emptyText: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm },
-  mapWrap: {
-    borderRadius: theme.radius.lg, overflow: "hidden",
-    backgroundColor: theme.color.surfaceSecondary,
-  },
-  caption: {
-    position: "absolute", left: 12, bottom: 12,
-    flexDirection: "row", alignItems: "center", gap: 6,
-    backgroundColor: "rgba(44,36,33,0.8)",
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.radius.pill,
-  },
-  captionText: { color: "#fff", fontWeight: "600", fontSize: 12, maxWidth: 240 },
+  caption: { flexDirection: "row", alignItems: "center", gap: 6 },
+  captionText: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, flex: 1 },
 });

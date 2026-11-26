@@ -20,6 +20,26 @@ export default function VerifyEmail() {
 
   if (!user) return null;
 
+  if (user.email_verified !== false) {
+    return (
+      <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
+        <View style={styles.header}>
+          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="verify-back" accessibilityRole="button" accessibilityLabel="Go back">
+            <Feather name="arrow-left" size={24} color={theme.color.onSurface} />
+          </Pressable>
+        </View>
+        <View style={styles.content} testID="verify-already-done">
+          <Feather name="check-circle" size={40} color={theme.color.success} />
+          <Text style={styles.title} accessibilityRole="header">Email confirmed</Text>
+          <Text style={styles.subtitle}><Text style={{ fontWeight: "700" }}>{user.email}</Text> is confirmed — nothing else to do.</Text>
+          <View style={{ marginTop: theme.space.xl }}>
+            <Button title="Back to the app" onPress={() => router.replace("/")} testID="verify-done-home" />
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const verify = async () => {
     if (code.length !== 6) { setError("The code has 6 digits."); return; }
     setLoading(true); setError("");

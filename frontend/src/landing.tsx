@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, Linking } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -8,6 +8,7 @@ import { useRouter } from "expo-router";
 import { theme } from "./theme";
 import { MenuButton } from "./drawer";
 import { Button } from "./ui";
+import { SiteFooter } from "./footer";
 
 interface Props {
   title: string;
@@ -17,9 +18,11 @@ interface Props {
   sections?: { title: string; body: string; icon?: string }[];
   cta?: { label: string; onPress: () => void; testID?: string };
   testID?: string;
+  /** Extra content shown after the sections (e.g. live data). */
+  children?: React.ReactNode;
 }
 
-export function LandingPage({ title, eyebrow, heroImage, intro, sections = [], cta, testID }: Props) {
+export function LandingPage({ title, eyebrow, heroImage, intro, sections = [], cta, testID, children }: Props) {
   const router = useRouter();
   return (
     <View style={{ flex: 1, backgroundColor: theme.color.surface }} testID={testID}>
@@ -54,23 +57,16 @@ export function LandingPage({ title, eyebrow, heroImage, intro, sections = [], c
               <Text style={styles.sectionBody}>{s.body}</Text>
             </View>
           ))}
+        </View>
+        {children}
+        <View style={{ paddingHorizontal: theme.space.xl, paddingBottom: theme.space.xl }}>
           {cta && (
             <View style={{ marginTop: theme.space.md }}>
               <Button title={cta.label} onPress={cta.onPress} testID={cta.testID} />
             </View>
           )}
         </View>
-        <View style={styles.footer}>
-          {Platform.OS === "web" && (
-            <Pressable onPress={() => Linking.openURL("https://expo.dev/")} style={styles.download} testID="landing-download">
-              <Feather name="download" size={16} color={theme.color.brand} />
-              <Text style={styles.downloadText}>Download the app</Text>
-            </Pressable>
-          )}
-          <Pressable onPress={() => router.push("/privacy")} testID="landing-privacy">
-            <Text style={styles.privacy}>Privacy Policy</Text>
-          </Pressable>
-        </View>
+        <SiteFooter />
       </ScrollView>
     </View>
   );
@@ -91,8 +87,4 @@ const styles = StyleSheet.create({
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: theme.space.sm },
   sectionTitle: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface },
   sectionBody: { color: theme.color.onSurfaceSecondary, lineHeight: 22 },
-  footer: { paddingHorizontal: theme.space.xl, paddingTop: theme.space.xl, borderTopColor: theme.color.border, borderTopWidth: StyleSheet.hairlineWidth, gap: theme.space.md },
-  download: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, backgroundColor: theme.color.brandSoft, paddingHorizontal: theme.space.md, paddingVertical: theme.space.sm, borderRadius: theme.radius.pill, alignSelf: "flex-start" },
-  downloadText: { color: theme.color.brandDark, fontWeight: "700" },
-  privacy: { color: theme.color.onSurfaceSecondary, fontWeight: "600", textDecorationLine: "underline" },
 });

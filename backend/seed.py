@@ -94,13 +94,25 @@ async def seed_data() -> None:
         })
     elif admin and not admin.get("is_admin"):
         await db.users.update_one({"email": ADMIN_EMAIL}, {"$set": {"is_admin": True, "role": "admin"}})
-    # Only remove legacy DEMO tutors (@babybabel.dev) that aren't in the keep list. NEVER real signups.
+    # Sample tutors (fictional people with made-up ratings) exist only when explicitly asked for,
+    # e.g. by the automated tests. Otherwise any demo account (@babybabel.dev) is removed — this
+    # never touches real signups, which can't use that domain.
+    want_samples = os.environ.get("SEED_SAMPLE_TUTORS", "").lower() == "true"
+    keep = list(KEEP_EMAILS) if want_samples else []
     legacy = await db.users.find(
-        {"role": "tutor", "email": {"$regex": "@babybabel\\.dev$", "$nin": list(KEEP_EMAILS)}}, {"_id": 0, "id": 1},
+        {"role": "tutor", "email": {"$regex": "@babybabel\\.dev$", "$nin": keep}}, {"_id": 0, "id": 1},
     ).to_list(500)
     for lu in legacy:
+        profile = await db.tutors.find_one({"user_id": lu["id"]}, {"_id": 0, "id": 1})
+        if profile:
+            await db.reviews.delete_many({"tutor_id": profile["id"]})
+            await db.favorites.delete_many({"tutor_id": profile["id"]})
         await db.tutors.delete_many({"user_id": lu["id"]})
         await db.users.delete_one({"id": lu["id"]})
+    if legacy:
+        logger.info(f"Removed {len(legacy)} sample tutor account(s)")
+    if not want_samples:
+        return
     # Sample tutors used to share the public password "password123", so anyone could sign in
     # as them on a live site. Use SEED_TUTOR_PASSWORD, or an unguessable random one.
     seed_pw = os.environ.get("SEED_TUTOR_PASSWORD") or secrets.token_urlsafe(24)
@@ -120,7 +132,8 @@ async def seed_data() -> None:
             "latitude": t["latitude"], "longitude": t["longitude"], "allows_remote": t["allows_remote"],
             "timezone": t["timezone"], "rating": t["rating"], "reviews_count": t["reviews_count"],
             "accreditation_urls": t["accreditation_urls"], "hero_image_url": t["hero_image_url"],
-            "verification_status": "none", "created_at": now_iso(),
+            # Bookable straight away so tests and demos don't need an admin approval step.
+            "verification_status": "verified", "verified_at": now_iso(), "created_at": now_iso(),
         })
 
 

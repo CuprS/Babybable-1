@@ -342,3 +342,35 @@ def test_dev_database_survives_a_restart(tmp_path):
     loaded, user, n = asyncio.run(scenario())
     assert loaded == 3 and n == 2 and user["email"] == "a@example.com"
     assert isinstance(user["when"], datetime)
+
+
+# ---- Verification is required before a tutor can be booked ----
+def test_unverified_tutor_is_hidden_and_cannot_be_booked(client, make_user):
+    tutor = make_user("tutor")
+    prof = client.get("/api/tutors/me/profile", headers=tutor["h"]).json()
+    parent = make_user()
+    assert prof["id"] not in [t["id"] for t in client.get("/api/tutors").json()]
+    assert prof["id"] not in [p["id"] for p in client.get("/api/tutors/map").json()]
+    assert client.get(f"/api/tutors/{prof['id']}", headers=parent["h"]).status_code == 404
+    assert client.get(f"/api/tutors/{prof['id']}", headers=tutor["h"]).status_code == 200  # owner can preview
+    assert client.get(f"/api/share/tutor/{prof['id']}").status_code == 404
+    r = book(client, parent, prof["id"])
+    assert r.status_code == 400 and "verification" in r.json()["detail"]
+    offer = client.post("/api/messages/invitation", headers=tutor["h"], json={
+        "to_user_id": parent["user"]["id"], "price_cents": 4000, "date": FUTURE, "time": "10:00",
+        "duration_minutes": 60, "language": "Spanish"})
+    assert offer.status_code == 403 and "verification" in offer.json()["detail"]
+
+
+def test_sample_tutors_only_on_request(db_call):
+    import os
+
+    import seed
+    os.environ["SEED_SAMPLE_TUTORS"] = "false"
+    try:
+        db_call(seed.seed_data)
+        assert db_call(core.db.users.count_documents, {"email": {"$regex": r"@babybabel\.dev$"}}) == 0
+    finally:
+        os.environ["SEED_SAMPLE_TUTORS"] = "true"
+        db_call(seed.seed_data)
+    assert db_call(core.db.users.count_documents, {"email": {"$regex": r"@babybabel\.dev$"}}) == 2

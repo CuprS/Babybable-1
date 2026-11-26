@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from booking_service import attach_payment_intent
 from core import (
-    BLOCKED_MSG, _normalize_slot, blocked_between, blocked_user_ids, current_user, db,
+    BLOCKED_MSG, NOT_VERIFIED_MSG, TUTOR_NOT_VERIFIED_MSG, _normalize_slot, blocked_between, blocked_user_ids,
+    current_user, db, is_tutor_verified,
     find_overlapping_booking, is_slot_allowed, now_iso, now_utc, platform_fee_for, push_notification,
     reject_past_slot, require_verified_email,
 )
@@ -78,6 +79,8 @@ async def send_invitation(body: InvitationCreate, u: dict = Depends(current_user
     if not to_user or to_user.get("role") != "parent":
         raise HTTPException(404, "Recipient not found")
     my_tutor = await db.tutors.find_one({"user_id": u["id"]}, {"_id": 0})
+    if not is_tutor_verified(my_tutor):
+        raise HTTPException(403, TUTOR_NOT_VERIFIED_MSG)
     tz = (my_tutor or {}).get("timezone")
     reject_past_slot(body.date, body.time, tz)
     slot_time = _normalize_slot(body.time)
@@ -121,6 +124,8 @@ async def accept_invitation(message_id: str, u: dict = Depends(current_user)):
     t = await db.tutors.find_one({"user_id": msg["from_user_id"]}, {"_id": 0})
     if not t or t.get("suspended"):
         raise HTTPException(404, "Tutor profile not found")
+    if not is_tutor_verified(t):
+        raise HTTPException(400, NOT_VERIFIED_MSG)
     tz = t.get("timezone")
     reject_past_slot(inv["date"], inv["time"], tz)
     if await find_overlapping_booking(t["id"], inv["date"], inv["time"], inv["duration_minutes"]):

@@ -45,8 +45,9 @@ and purge W-9s past their retention date.
   to make it mandatory before booking, messaging or posting.
 - **Password reset:** "Forgot password?" on the login screen emails a 6-digit code. Codes expire
   after 15 minutes and lock after 5 wrong tries. Resetting signs out every other session.
-- **Tutor verification:** tutors upload a photo ID and a background-check certificate. An admin
-  approves them on the Admin page, and families see a ✔ Verified badge and can filter by it.
+- **Tutor verification (required):** tutors upload a photo ID and a background-check certificate,
+  and an admin approves them on the Admin page. Until then they don't appear in search, on the
+  map or in share links, can't be booked, and can't send lesson offers. Verified tutors show a ✔ Verified badge.
   ID documents are visible only to the tutor and admins. This is a manual review: plugging in an
   automated provider (Checkr, Certn, a DBS umbrella body…) means replacing the upload step in
   `routes/tutors.py` with that provider's API and webhook.
@@ -118,8 +119,9 @@ python run_dev.py
   Delete that file to start fresh.
 - **Uploads:** stored in `backend/data/uploads`.
 - **Email:** nothing is sent; verification and reset codes are printed in the terminal.
-- **Sample logins:** tutors `sofia@babybabel.dev` / `marie@babybabel.dev` (password `password123`),
-  admin `admin@example.com` (password `admin-pass-123`).
+- **Logins:** admin `admin@example.com` (password `admin-pass-123`). The database starts empty.
+  To try booking quickly, set `SEED_SAMPLE_TUTORS=true` for two verified sample tutors
+  (`sofia@babybabel.dev` / `marie@babybabel.dev`, password `password123`); remove it to delete them again.
 
 Anything in `backend/.env` overrides these defaults. For a real database, set `MONGO_URL`
 to a MongoDB connection string (local MongoDB, or a free MongoDB Atlas cluster).
@@ -132,7 +134,8 @@ yarn install
 npx expo start          # then press w for web, or scan the QR code with Expo Go
 ```
 
-`frontend/.env.development` already points the app at the local API.
+`frontend/.env.development` already points the app at the local API (`EXPO_PUBLIC_BACKEND_URL`)
+and sets `EXPO_PUBLIC_WEB_URL`, the web-app address used by "Open the web app" in the phone apps.
 
 ## Deploying
 

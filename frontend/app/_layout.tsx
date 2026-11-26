@@ -23,7 +23,7 @@ function AuthGate() {
 
   useEffect(() => {
     if (loading) return;
-    const publicRoutes = ["find-tutor", "become-tutor", "languages-near-you", "support", "mission", "blog", "privacy", "suspended", "tutor"];
+    const publicRoutes = ["find-tutor", "become-tutor", "languages-near-you", "support", "mission", "blog", "privacy", "terms", "suspended", "tutor", "+not-found"];
     const inAuth = segments[0] === "(auth)" || segments[0] === "onboarding";
     const isPublic = publicRoutes.includes(String(segments[0] ?? ""));
     const inAdmin = segments[0] === "admin";

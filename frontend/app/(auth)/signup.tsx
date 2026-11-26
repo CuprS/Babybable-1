@@ -75,6 +75,12 @@ export default function Signup() {
             <Input testID="signup-password-input" label="Password" secureTextEntry value={password} onChangeText={setPassword} placeholder="At least 8 characters" />
             {error ? <Text testID="signup-error" style={styles.error}>{error}</Text> : null}
             <Button testID="signup-submit-button" title="Create account" onPress={submit} loading={loading} />
+            <Text style={styles.legal} testID="signup-legal">
+              By creating an account you agree to our{" "}
+              <Text style={styles.legalLink} onPress={() => router.push("/terms")} accessibilityRole="link">Terms of Service</Text>
+              {" "}and{" "}
+              <Text style={styles.legalLink} onPress={() => router.push("/privacy")} accessibilityRole="link">Privacy Policy</Text>.
+            </Text>
             <Pressable onPress={() => router.replace("/(auth)/login")} testID="signup-goto-login" style={{ alignItems: "center" }}>
               <Text style={styles.link}>Already have an account? <Text style={{ fontWeight: "700", color: theme.color.brand }}>Log in</Text></Text>
             </Pressable>
@@ -102,4 +108,6 @@ const styles = StyleSheet.create({
   roleTextActive: { color: theme.color.onBrand },
   error: { color: theme.color.error, fontSize: theme.font.base },
   link: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.base, marginTop: theme.space.sm },
+  legal: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, textAlign: "center", lineHeight: 18 },
+  legalLink: { color: theme.color.brandDark, fontWeight: "700", textDecorationLine: "underline" },
 });

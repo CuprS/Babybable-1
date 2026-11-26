@@ -2,8 +2,8 @@
 
 - Database: a local file-backed stand-in (data/dev-db.json), so you don't need MongoDB.
 - Uploads: stored in data/uploads.  Email: not sent; codes are printed in this window.
-- Sample logins: sofia@babybabel.dev / marie@babybabel.dev (tutors, password123) and
-  admin@example.com (admin, admin-pass-123).
+- Admin login: admin@example.com / admin-pass-123. The database starts empty; set
+  SEED_SAMPLE_TUTORS=true to add two verified sample tutors (password123).
 - Reloads automatically when you edit backend code. Listens on http://127.0.0.1:8001 only.
 
 Anything you put in backend/.env (or the environment) overrides these defaults — e.g. set

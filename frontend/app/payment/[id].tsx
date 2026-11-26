@@ -86,7 +86,9 @@ export default function Payment() {
         </View>
 
         <Text style={styles.smallprint}>
-          By tapping &quot;Pay&quot;, you agree to Babybabel&apos;s terms and confirm the session details above. In MVP the payment is
+          By tapping &quot;Pay&quot;, you agree to Babybabel&apos;s{" "}
+          <Text style={{ textDecorationLine: "underline", fontWeight: "700" }} onPress={() => router.push("/terms")} accessibilityRole="link" testID="payment-terms-link">Terms of Service</Text>
+          {" "}(including the cancellation and refund rules) and confirm the session details above. In this test version the payment is
           mocked — no card is charged; the booking simply flips to &quot;paid&quot;.
         </Text>
       </ScrollView>

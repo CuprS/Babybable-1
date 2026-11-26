@@ -270,13 +270,6 @@ EDITORIAL_POSTS = [
         "body": "Mandarin is tonal, and young ears are wonderfully good at tones. That is why our Mandarin tutors start with music.\n\nNursery songs carry the rise and fall of each word far better than any chart. By the time sentences arrive, children already hear the melody of the language.\n\nThe biggest predictor of fluency at eight? Hours of joyful exposure before five.",
     },
     {
-        "id": "meet-marie", "tag": "Tutor spotlight",
-        "title": "Meet Marie: 12 years of French, 2 dogs, and 0 patience for boring flashcards",
-        "excerpt": "'The best lessons are the ones where the kids forget it's a lesson at all.'",
-        "cover_image_url": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?crop=entropy&cs=srgb&fm=jpg&q=85&w=800",
-        "body": "Marie Dubois grew up in Lyon and has spent twelve years teaching French to children aged two to ten.\n\nHer sessions look like baking, gardening and puppet shows — all in French. 'The best lessons are the ones where the kids forget it's a lesson at all,' she says.\n\nWhen she is not tutoring, she is walking her two dogs, who also only respond to French.",
-    },
-    {
         "id": "small-languages", "tag": "Mission",
         "title": "The 'small' languages deserve big tutors",
         "excerpt": "Why Basque, Yoruba, and Tagalog belong on the same shelf as Spanish and French.",
@@ -286,8 +279,12 @@ EDITORIAL_POSTS = [
 ]
 
 
+RETIRED_EDITORIAL_IDS = ("meet-marie",)  # spotlighted a fictional sample tutor
+
+
 async def seed_editorial_posts() -> None:
     now = datetime.now(timezone.utc).isoformat()
+    await db.posts.delete_many({"id": {"$in": list(RETIRED_EDITORIAL_IDS)}, "author_id": EDITORIAL_AUTHOR_ID})
     for p in EDITORIAL_POSTS:
         if await db.posts.find_one({"id": p["id"]}, {"_id": 1}):
             continue

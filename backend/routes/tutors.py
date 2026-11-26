@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette.concurrency import run_in_threadpool
 
 from core import (
-    ACTIVE_STATUSES, WEEKDAYS, _normalize_slot, blocked_between, blocked_user_ids, current_user, db,
+    ACTIVE_STATUSES, WEEKDAYS, _normalize_slot, blocked_between, blocked_user_ids, current_user, db, is_tutor_verified,
     geocode, haversine_miles, notify_admins, now_iso, optional_user, push_notification, require_admin,
     slot_minutes, valid_timezone,
 )
@@ -54,15 +54,15 @@ async def list_tutors(
     verified_only: bool = False,
     u: Optional[dict] = Depends(optional_user),
 ):
-    query: dict = {"suspended": {"$ne": True}}
+    # Only verified tutors are listed: identity + background check approval is required
+    # before anyone can book them. (verified_only is kept for older app versions.)
+    query: dict = {"suspended": {"$ne": True}, "verification_status": "verified"}
     if language:
         query["languages"] = {"$regex": f"^{re.escape(language.strip()[:60])}$", "$options": "i"}
     if min_rate is not None:
         query.setdefault("hourly_rate_cents", {})["$gte"] = min_rate
     if max_rate is not None:
         query.setdefault("hourly_rate_cents", {})["$lte"] = max_rate
-    if verified_only:
-        query["verification_status"] = "verified"
     if q:
         # Escape user input so a crafted regex can't pin DB CPU (ReDoS) or match unexpected fields.
         needle = re.escape(q.strip())[:80]
@@ -108,7 +108,7 @@ async def list_tutors(
 async def tutors_map(u: Optional[dict] = Depends(optional_user)):
     hidden = await blocked_user_ids(u["id"]) if u else set()
     docs = await db.tutors.find(
-        {"suspended": {"$ne": True}, **({"user_id": {"$nin": list(hidden)}} if hidden else {})},
+        {"suspended": {"$ne": True}, "verification_status": "verified", **({"user_id": {"$nin": list(hidden)}} if hidden else {})},
         {"_id": 0, "id": 1, "name": 1, "avatar_url": 1, "latitude": 1, "longitude": 1, "location": 1,
          "locations": 1, "hourly_rate_cents": 1, "allows_remote": 1, "verification_status": 1},
     ).to_list(200)
@@ -191,6 +191,10 @@ async def tutor_by_user(user_id: str, u: Optional[dict] = Depends(optional_user)
 async def get_tutor(tutor_id: str, u: Optional[dict] = Depends(optional_user)):
     d = await db.tutors.find_one({"id": tutor_id}, {"_id": 0})
     if not d or d.get("suspended") or (u and await blocked_between(u["id"], d["user_id"])):
+        raise HTTPException(404, "Tutor not found")
+    # Until verified, a profile is visible only to the tutor themself and to admins.
+    is_owner_or_admin = bool(u) and (u["id"] == d["user_id"] or u.get("is_admin"))
+    if not is_tutor_verified(d) and not is_owner_or_admin:
         raise HTTPException(404, "Tutor not found")
     return tutor_doc_to_model(d)
 

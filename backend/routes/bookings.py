@@ -10,7 +10,8 @@ from pymongo.errors import DuplicateKeyError
 
 from booking_service import attach_payment_intent, cancel_booking, refund_policy
 from core import (
-    CANCEL_FULL_REFUND_HOURS, RESCHEDULE_MIN_HOURS, TUTOR_RESPONSE_HOURS, _normalize_slot, blocked_between,
+    CANCEL_FULL_REFUND_HOURS, NOT_VERIFIED_MSG, RESCHEDULE_MIN_HOURS, TUTOR_RESPONSE_HOURS, _normalize_slot,
+    blocked_between, is_tutor_verified,
     booking_start_utc, credit_platform_fee, current_user, db, find_overlapping_booking, haversine_miles,
     is_slot_allowed, now_iso, now_utc, platform_fee_for, push_notification, reject_past_slot,
     require_verified_email, slot_key, tutor_profile_id, tutor_user_id,
@@ -53,6 +54,8 @@ async def create_booking(body: BookingCreate, u: dict = Depends(current_user)):
     t = await db.tutors.find_one({"id": body.tutor_id}, {"_id": 0})
     if not t or t.get("suspended") or await blocked_between(u["id"], t["user_id"]):
         raise HTTPException(404, "Tutor not found")
+    if not is_tutor_verified(t):
+        raise HTTPException(400, NOT_VERIFIED_MSG)
     tz = t.get("timezone") or None  # session times are in the tutor's zone
     reject_past_slot(body.date, body.time, tz)
     slot_time = _normalize_slot(body.time)
