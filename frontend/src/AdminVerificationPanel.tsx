@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator, Platform } from "react-native";
 import { theme } from "./theme";
 import { useToast } from "./toast";
-import { apiFetch, TOKEN_KEY } from "./api";
-import { storage } from "./utils/storage";
+import { apiFetch } from "./api";
+import { privateFileUrl } from "./privatefile";
 
 interface Pending {
   id: string; user_id: string; name: string; email: string;
@@ -11,17 +11,13 @@ interface Pending {
   id_document_url?: string; background_check_url?: string; accreditation_document_url?: string;
 }
 
-const BASE = process.env.EXPO_PUBLIC_BACKEND_URL as string;
-
-/** Identity documents are private, so they're fetched with the admin's token and opened as a blob. */
+/** Identity documents are private: open them through a short-lived signed link. */
 async function openPrivateFile(path: string) {
   if (Platform.OS !== "web") {
     throw new Error("Open the Admin page in a web browser to review identity documents.");
   }
-  const token = await storage.secureGet<string>(TOKEN_KEY, "");
-  const res = await fetch(`${BASE}/api/files/${path}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error(`Couldn't open the file (${res.status})`);
-  window.open(URL.createObjectURL(await res.blob()), "_blank", "noopener");
+  const url = await privateFileUrl(path);
+  if (url) window.open(url, "_blank", "noopener");
 }
 
 /** Admin: review tutors' identity + background-check documents. */

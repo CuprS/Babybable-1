@@ -9,7 +9,7 @@ from starlette.concurrency import run_in_threadpool
 import storage
 from core import (
     APP_NAME, FILE_URL_MINUTES, MAX_UPLOAD_BYTES, _user_from_token, current_user, db, file_signature_ok, logger,
-    now_iso, oauth2_scheme, signed_file_url,
+    now_iso, request_token, signed_file_url,
 )
 
 router = APIRouter()
@@ -103,13 +103,13 @@ async def file_link(path: str, u: dict = Depends(current_user)):
 
 @router.get("/files/{path:path}")
 async def get_file(path: str, exp: Optional[str] = None, sig: Optional[str] = None,
-                   token: Optional[str] = Depends(oauth2_scheme)):
+                   token: Optional[str] = Depends(request_token)):
     rec = await db.uploads.find_one({"path": path}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "File not found")
     level, owner = await _file_access(path, rec.get("owner_id"))
     if not file_signature_ok(path, exp, sig):  # a valid signed link already proves access
-        caller = await _user_from_token(token)  # Authorization header only — never tokens in the URL
+        caller = await _user_from_token(token)  # header or session cookie — never tokens in the URL
         ok, code = _allowed(level, owner, caller)
         if not ok:
             raise HTTPException(code, "Sign in to see this file" if code == 401 else "Not your file")

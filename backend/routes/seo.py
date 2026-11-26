@@ -4,7 +4,6 @@ The Expo web app renders in the browser, so crawlers and chat apps see an empty 
 routes return real HTML (title, description, Open Graph tags, readable text) for public tutor
 profiles and blog posts, plus a sitemap. People who land on them are sent on to the app.
 """
-import json
 from html import escape
 
 from fastapi import APIRouter, HTTPException
@@ -13,6 +12,12 @@ from fastapi.responses import HTMLResponse, Response
 from core import PUBLIC_WEB_URL, db
 
 router = APIRouter()
+
+
+# The same script on every share page, so the site's Content-Security-Policy can allow exactly
+# this script by its hash (see deploy/Caddyfile and tests_inprocess/test_security.py). It sends
+# people (not crawlers) on to the page's canonical app address.
+REDIRECT_JS = "if(!/bot|crawl|spider|preview|facebookexternalhit|slack|discord|whatsapp/i.test(navigator.userAgent)){location.replace(document.querySelector('link[rel=canonical]').href)}"
 
 
 def _abs(path: str) -> str:
@@ -29,7 +34,6 @@ def _image(url: str) -> str:
 
 def _page(title: str, description: str, body_html: str, app_path: str, image: str = "", kind: str = "website") -> HTMLResponse:
     t, d, app_url = escape(title), escape(description[:300]), escape(_abs(app_path))
-    js_url = json.dumps(_abs(app_path)).replace("</", "<\\/")
     img = f'<meta property="og:image" content="{escape(image)}"><meta name="twitter:image" content="{escape(image)}">' if image else ""
     html = f"""<!doctype html>
 <html lang="en"><head>
@@ -44,7 +48,7 @@ def _page(title: str, description: str, body_html: str, app_path: str, image: st
 <style>body{{font-family:system-ui,Arial,sans-serif;max-width:720px;margin:0 auto;padding:24px 16px;color:#2C2421;background:#FAF8F5;line-height:1.6;font-size:18px}}
 a.cta{{display:inline-block;background:#B83A23;color:#fff;padding:14px 22px;border-radius:999px;text-decoration:none;font-weight:700}}
 img{{max-width:100%;border-radius:16px}}</style>
-<script>if(!/bot|crawl|spider|preview|facebookexternalhit|slack|discord|whatsapp/i.test(navigator.userAgent)){{location.replace({js_url})}}</script>
+<script>{REDIRECT_JS}</script>
 </head><body>{body_html}<p><a class="cta" href="{app_url}">Open in Babybabel</a></p></body></html>"""
     return HTMLResponse(html, headers={"Cache-Control": "public, max-age=600"})
 

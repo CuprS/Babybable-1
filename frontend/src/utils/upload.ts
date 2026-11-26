@@ -12,5 +12,6 @@ export async function uploadForm(url: string, uri: string, name: string, type: s
     form.append("file", blob as any, name);
   }
   // Never set Content-Type: the runtime adds the multipart boundary.
-  return fetch(url, { method: "POST", body: form, headers });
+  // credentials: the website's session cookie (phone apps send a bearer token in headers).
+  return fetch(url, { method: "POST", body: form, headers, credentials: Platform.OS === "web" ? "include" : "omit" });
 }

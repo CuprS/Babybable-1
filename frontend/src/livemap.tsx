@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { View, StyleSheet, Platform } from "react-native";
 import { WebView } from "react-native-webview";
 import { theme } from "./theme";
@@ -28,30 +28,42 @@ interface Props {
  * Works everywhere without an API key. Emits marker taps back to RN via postMessage.
  */
 export function LiveMap({ markers, height = 220, onPinPress, testID, zoom, title = "Map" }: Props) {
-  const html = useMemo(() => buildHtml(markers, zoom), [markers, zoom]);
+  // Phone apps render the map from an HTML string in a WebView. The website instead embeds
+  // /map.html from our own site (no inline scripts, so a strict Content-Security-Policy applies).
+  const html = useMemo(() => (Platform.OS === "web" ? "" : buildHtml(markers, zoom)), [markers, zoom]);
+  const frame = useRef<HTMLIFrameElement | null>(null);
 
-  React.useEffect(() => {
+  const sendMarkers = React.useCallback(() => {
+    const win = frame.current?.contentWindow;
+    if (win) win.postMessage({ type: "markers", markers, zoom }, window.location.origin);
+  }, [markers, zoom]);
+
+  useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
     const handler = (e: MessageEvent) => {
-      try {
-        const data = typeof e.data === "string" ? JSON.parse(e.data) : e.data;
-        if (data?.type === "pin" && data?.id) onPinPress?.(String(data.id));
-      } catch {}
+      // Only our own map frame may talk to us.
+      if (e.origin !== window.location.origin || e.source !== frame.current?.contentWindow) return;
+      const data = e.data || {};
+      if (data.type === "map-ready") sendMarkers();
+      else if (data.type === "pin" && data.id) onPinPress?.(String(data.id));
     };
     window.addEventListener("message", handler);
     return () => window.removeEventListener("message", handler);
-  }, [onPinPress]);
+  }, [onPinPress, sendMarkers]);
+
+  // New pins after the map has loaded.
+  useEffect(() => { if (Platform.OS === "web") sendMarkers(); }, [sendMarkers]);
 
   if (Platform.OS === "web") {
-    // @ts-ignore — iframe is a valid web element and works in RNW.
     return (
       <View style={[styles.wrap, { height }]} testID={testID}>
-        {/* @ts-ignore */}
+        {/* @ts-ignore — iframe is a valid web element in react-native-web */}
         <iframe
-          srcDoc={html}
+          ref={frame}
+          src="/map.html"
           style={{ width: "100%", height: "100%", border: "0" }}
-          sandbox="allow-scripts allow-same-origin"
           title={title}
+          loading="lazy"
         />
       </View>
     );

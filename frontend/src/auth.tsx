@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { storage } from "@/src/utils/storage";
-import { apiFetch, TOKEN_KEY, UserPublic, Role, onAccountSuspended, deviceTimeZone } from "@/src/api";
+import { apiFetch, COOKIE_SESSION, TOKEN_KEY, UserPublic, Role, onAccountSuspended, deviceTimeZone } from "@/src/api";
 import { registerForPush, unregisterPush } from "@/src/push";
 
 interface AuthState {
@@ -11,12 +11,19 @@ interface AuthState {
   signIn: (email: string, password: string) => Promise<UserPublic>;
   signUp: (email: string, password: string, name: string, role: Role) => Promise<UserPublic>;
   signOut: () => Promise<void>;
+  /** Signs out every phone and browser on this account. */
+  signOutEverywhere: () => Promise<void>;
   refresh: () => Promise<void>;
   signInWithToken: (token: string, user: UserPublic) => Promise<void>;
   setUser: (user: UserPublic) => void;
 }
 
 const AuthCtx = createContext<AuthState | undefined>(undefined);
+
+// Phone apps keep the token in encrypted device storage. The website never stores it: the API
+// keeps the session in an HttpOnly cookie. (Removing also clears tokens older versions stored.)
+const saveToken = async (token: string) => { if (!COOKIE_SESSION && token) await storage.secureSet(TOKEN_KEY, token); };
+const forgetToken = () => storage.secureRemove(TOKEN_KEY);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserPublic | null>(null);
@@ -25,12 +32,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refresh = useCallback(async () => {
     try {
-      const token = await storage.secureGet<string>(TOKEN_KEY, "");
-      if (!token) { setUser(null); return; }
+      if (COOKIE_SESSION) {
+        await forgetToken();  // never keep a readable token in the browser
+      } else if (!(await storage.secureGet<string>(TOKEN_KEY, ""))) {
+        setUser(null); return;
+      }
       const me = await apiFetch<UserPublic>("/auth/me");
       setUser(me);
     } catch {
-      await storage.secureRemove(TOKEN_KEY);
+      await forgetToken();
       setUser(null);
     }
   }, []);
@@ -42,7 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // A paused account gets signed out everywhere; AuthGate routes to /suspended.
   useEffect(() => {
     onAccountSuspended(async () => {
-      await storage.secureRemove(TOKEN_KEY);
+      await forgetToken();
       setSuspended(true);
       setUser(null);
     });
@@ -69,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    await storage.secureSet(TOKEN_KEY, data.access_token);
+    await saveToken(data.access_token);
     setSuspended(false);
     setUser(data.user);
     return data.user;
@@ -80,26 +90,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       method: "POST",
       body: JSON.stringify({ email, password, name, role, timezone: deviceTimeZone() }),
     });
-    await storage.secureSet(TOKEN_KEY, data.access_token);
+    await saveToken(data.access_token);
     setUser(data.user);
     return data.user;
   };
 
   const signOut = async () => {
     await unregisterPush();
-    await storage.secureRemove(TOKEN_KEY);
+    if (COOKIE_SESSION) await apiFetch("/auth/logout", { method: "POST" }).catch(() => {});
+    await forgetToken();
+    setUser(null);
+  };
+
+  const signOutEverywhere = async () => {
+    await apiFetch("/auth/logout-all", { method: "POST" });
+    await forgetToken();
     setUser(null);
   };
 
   /** Use a token from a password reset to sign straight in. */
   const signInWithToken = async (token: string, u: UserPublic) => {
-    await storage.secureSet(TOKEN_KEY, token);
+    await saveToken(token);
     setSuspended(false);
     setUser(u);
   };
 
   return (
-    <AuthCtx.Provider value={{ user, loading, suspended, clearSuspended: () => setSuspended(false), signIn, signUp, signOut, refresh, signInWithToken, setUser }}>
+    <AuthCtx.Provider value={{ user, loading, suspended, clearSuspended: () => setSuspended(false), signIn, signUp, signOut, signOutEverywhere, refresh, signInWithToken, setUser }}>
       {children}
     </AuthCtx.Provider>
   );

@@ -1,10 +1,20 @@
+import { Platform } from "react-native";
 import { storage } from "@/src/utils/storage";
 import { uploadForm } from "@/src/utils/upload";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL as string;
 export const TOKEN_KEY = "babybabel_token";
 
+/**
+ * On the website the sign-in lives in an HttpOnly cookie set by the API — page scripts never see
+ * it. Every request carries a custom header the API requires for cookie sessions (other sites
+ * can't add it). The phone apps keep a bearer token in encrypted device storage instead.
+ */
+export const COOKIE_SESSION = Platform.OS === "web";
+const WEB_SESSION_HEADERS = { "X-Session-Mode": "cookie", "X-Babybabel-CSRF": "1" };
+
 async function authHeaders(): Promise<Record<string, string>> {
+  if (COOKIE_SESSION) return WEB_SESSION_HEADERS;
   const t = await storage.secureGet<string>(TOKEN_KEY, "");
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
@@ -18,7 +28,7 @@ export async function apiFetch<T = any>(
     ...(await authHeaders()),
     ...((init.headers as Record<string, string>) || {}),
   };
-  const res = await fetch(`${BASE}/api${path}`, { ...init, headers });
+  const res = await fetch(`${BASE}/api${path}`, { ...init, headers, credentials: COOKIE_SESSION ? "include" : "omit" });
   const text = await res.text();
   const data = text ? (() => { try { return JSON.parse(text); } catch { return text; } })() : null;
   if (!res.ok) {

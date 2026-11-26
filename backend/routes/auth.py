@@ -4,13 +4,14 @@ import secrets
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 import storage
 from booking_service import cancel_booking
 from core import (
-    SUSPENDED_MSG, W9_RETENTION_DAYS, booking_start_utc, check_own_files, current_user,
+    SUSPENDED_MSG, W9_RETENTION_DAYS, booking_start_utc, check_own_files, clear_session_cookie, set_session_cookie,
+    wants_cookie_session, current_user,
     current_user_even_if_paused, db, email_fingerprint, email_is_verified, hash_password, hash_secret,
     logger, make_token, new_code, now_iso, now_utc, rate_limit, tutor_profile_id, valid_timezone,
     verify_password,
@@ -32,6 +33,32 @@ def user_to_public(u: dict) -> UserPublic:
         id=u["id"], email=u["email"], name=u["name"], role=u["role"], avatar_url=u.get("avatar_url"),
         is_admin=bool(u.get("is_admin")), email_verified=email_is_verified(u), timezone=u.get("timezone"),
     )
+
+
+def issue_session(request: Request, response: Response, user: dict) -> AuthResponse:
+    """Phone apps get the token in the body (kept in encrypted device storage). The website asks
+    for a cookie session: an HttpOnly cookie scripts can't read, and no token in the body."""
+    token = make_token(user["id"], user["role"], int(user.get("token_version", 0)))
+    if wants_cookie_session(request):
+        set_session_cookie(response, token)
+        token = ""
+    return AuthResponse(access_token=token, user=user_to_public(user))
+
+
+@router.post("/auth/logout")
+async def logout(response: Response):
+    """Ends the website session on this browser (phone apps just forget their token)."""
+    clear_session_cookie(response)
+    return {"ok": True}
+
+
+@router.post("/auth/logout-all")
+async def logout_everywhere(response: Response, u: dict = Depends(current_user_even_if_paused)):
+    """Signs out every device and browser: all existing sign-ins stop working at once."""
+    await db.users.update_one({"id": u["id"]}, {"$inc": {"token_version": 1}})
+    await db.push_tokens.delete_many({"user_id": u["id"]})
+    clear_session_cookie(response)
+    return {"ok": True}
 
 
 # ---- One-time codes (email verification + password reset) ----
@@ -84,7 +111,7 @@ async def _email_code(to: str, purpose: str, code: str) -> None:
 
 # ---- Signup / login ----
 @router.post("/auth/signup", response_model=AuthResponse, status_code=201)
-async def signup(body: SignupRequest, request: Request):
+async def signup(body: SignupRequest, request: Request, response: Response):
     rate_limit("signup", max_hits=5, per_seconds=600, request=request)
     email = body.email.lower().strip()
     if body.role not in ("parent", "tutor"):
@@ -134,18 +161,18 @@ async def signup(body: SignupRequest, request: Request):
     if doc.get("suspended"):
         raise HTTPException(423, SUSPENDED_MSG)
     await _email_code(email, "verify", await _issue_code(doc, "verify"))
-    return AuthResponse(access_token=make_token(uid, body.role), user=user_to_public(doc))
+    return issue_session(request, response, doc)
 
 
 @router.post("/auth/login", response_model=AuthResponse)
-async def login(body: LoginRequest, request: Request):
+async def login(body: LoginRequest, request: Request, response: Response):
     rate_limit("login", max_hits=8, per_seconds=300, request=request)
     u = await db.users.find_one({"email": body.email.lower().strip()})
     if not u or not verify_password(body.password, u["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
     if u.get("suspended") and not u.get("is_admin"):
         raise HTTPException(423, SUSPENDED_MSG)
-    return AuthResponse(access_token=make_token(u["id"], u["role"], u.get("token_version", 0)), user=user_to_public(u))
+    return issue_session(request, response, u)
 
 
 @router.get("/auth/me", response_model=UserPublic)
@@ -208,7 +235,7 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
 
 
 @router.post("/auth/reset-password", response_model=AuthResponse)
-async def reset_password(body: ResetPasswordRequest, request: Request):
+async def reset_password(body: ResetPasswordRequest, request: Request, response: Response):
     email = body.email.lower().strip()
     rate_limit("reset", max_hits=10, per_seconds=900, request=request, key=email)
     rate_limit("reset-any-ip", max_hits=10, per_seconds=900, request=request, key=email, per_ip=False)
@@ -225,7 +252,7 @@ async def reset_password(body: ResetPasswordRequest, request: Request):
     if u.get("suspended") and not u.get("is_admin"):
         raise HTTPException(423, SUSPENDED_MSG)
     fresh = {**u, "email_verified": True, "token_version": version}
-    return AuthResponse(access_token=make_token(u["id"], u["role"], version), user=user_to_public(fresh))
+    return issue_session(request, response, fresh)
 
 
 # ---- Push tokens ----
@@ -250,7 +277,7 @@ async def remove_push_token(token: str, u: dict = Depends(current_user)):
 
 # ---- Delete account ----
 @router.delete("/auth/me")
-async def delete_account(u: dict = Depends(current_user_even_if_paused)):
+async def delete_account(response: Response, u: dict = Depends(current_user_even_if_paused)):
     """Delete the person and their content, but keep anonymised booking and payment records:
     the other side's history, accounting and tax reporting depend on them."""
     uid = u["id"]
@@ -313,4 +340,5 @@ async def delete_account(u: dict = Depends(current_user_even_if_paused)):
         )
     # Platform earnings intentionally preserved (accounting record); no PII lives on that doc.
     await db.users.delete_one({"id": uid})
+    clear_session_cookie(response)
     return {"deleted": True}

@@ -1,0 +1,26 @@
+html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; }
+body { background: #F2EAE0; }
+.pin {
+  position: relative;
+  background: #ED6249;
+  color: #fff;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  border: 2px solid #fff;
+  cursor: pointer;
+}
+.pin::after {
+  content: "";
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 6px 5px 0 5px;
+  border-style: solid;
+  border-color: #ED6249 transparent transparent transparent;
+}

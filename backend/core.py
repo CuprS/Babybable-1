@@ -455,6 +455,42 @@ async def _user_from_token(token: Optional[str]) -> Optional[dict]:
     return user
 
 
+# ---- Sessions: bearer token (phone apps) or HttpOnly cookie (website) ----
+# The website keeps its sign-in in a cookie page scripts can't read, so an injected script
+# can't steal it. Cookie requests that change anything must also send X-Babybabel-CSRF: 1 —
+# a custom header other websites can't add — which, with SameSite=Strict, stops cross-site forgery.
+SESSION_COOKIE = "bb_session"
+CSRF_HEADER = "x-babybabel-csrf"
+COOKIE_SECURE = not PUBLIC_WEB_URL.startswith("http://")  # http only for local development
+_SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+
+
+async def request_token(request: Request, bearer: Optional[str] = Depends(oauth2_scheme)) -> Optional[str]:
+    if bearer:
+        return bearer
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        return None
+    if request.method not in _SAFE_METHODS and request.headers.get(CSRF_HEADER) != "1":
+        raise HTTPException(403, "Missing security header")
+    return token
+
+
+def wants_cookie_session(request: Request) -> bool:
+    return request.headers.get("x-session-mode", "").lower() == "cookie"
+
+
+def set_session_cookie(response, token: str) -> None:
+    response.set_cookie(
+        SESSION_COOKIE, token, max_age=ACCESS_TOKEN_MINUTES * 60, httponly=True,
+        secure=COOKIE_SECURE, samesite="strict", path="/api",
+    )
+
+
+def clear_session_cookie(response) -> None:
+    response.delete_cookie(SESSION_COOKIE, path="/api", secure=COOKIE_SECURE, httponly=True, samesite="strict")
+
+
 async def _token_user(token: Optional[str]) -> dict:
     if not token:
         raise HTTPException(401, "Not authenticated")
@@ -464,19 +500,19 @@ async def _token_user(token: Optional[str]) -> dict:
     return user
 
 
-async def current_user(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
+async def current_user(token: Optional[str] = Depends(request_token)) -> dict:
     user = await _token_user(token)
     if user.get("suspended") and not user.get("is_admin"):
         raise HTTPException(423, SUSPENDED_MSG)
     return user
 
 
-async def current_user_even_if_paused(token: Optional[str] = Depends(oauth2_scheme)) -> dict:
+async def current_user_even_if_paused(token: Optional[str] = Depends(request_token)) -> dict:
     """Used only for account deletion — a paused user may still delete their data."""
     return await _token_user(token)
 
 
-async def optional_user(token: Optional[str] = Depends(oauth2_scheme)) -> Optional[dict]:
+async def optional_user(token: Optional[str] = Depends(request_token)) -> Optional[dict]:
     """Same as current_user but returns None (not 401) when no valid token."""
     user = await _user_from_token(token)
     return None if (user and user.get("suspended") and not user.get("is_admin")) else user

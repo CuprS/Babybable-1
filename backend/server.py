@@ -68,11 +68,11 @@ if core.PUBLIC_WEB_URL and core.PUBLIC_WEB_URL not in _cors_origins:
     _cors_origins.append(core.PUBLIC_WEB_URL)
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=False,  # bearer tokens only — no cookies
+    allow_credentials=True,  # the website's session cookie (origins below are explicit, never *)
     allow_origins=_cors_origins,
     allow_origin_regex=os.environ.get("CORS_ORIGIN_REGEX", r"^http://(localhost|127\.0\.0\.1)(:\d+)?$"),
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Stripe-Signature"],
+    allow_headers=["Authorization", "Content-Type", "Stripe-Signature", "X-Babybabel-CSRF", "X-Session-Mode"],
 )
 
 api = APIRouter(prefix="/api")

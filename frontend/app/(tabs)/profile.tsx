@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, Pressable, ScrollView, Alert, ActivityIndicator, Platform } from "react-native";
 import { useEffect, useState } from "react";
 import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -12,7 +12,7 @@ import { Button } from "@/src/ui";
 import { MenuButton } from "@/src/drawer";
 
 export default function Profile() {
-  const { user, signOut, refresh } = useAuth();
+  const { user, signOut, signOutEverywhere, refresh } = useAuth();
   const router = useRouter();
   const [uploading, setUploading] = useState(false);
   const [tutorId, setTutorId] = useState<string | null>(null);
@@ -44,6 +44,21 @@ export default function Profile() {
     } catch (e: any) {
       Alert.alert("Upload failed", e?.message || "Try again");
     } finally { setUploading(false); }
+  };
+
+  const confirmSignOutEverywhere = async () => {
+    const message = "This signs you out on every phone and browser, including this one. Use it if you lost a device or think someone else has access.";
+    const go = async () => {
+      try { await signOutEverywhere(); router.replace("/onboarding"); }
+      catch (e: any) { Alert.alert("Couldn't sign out", e?.message || "Try again"); }
+    };
+    if (Platform.OS === "web") { if (window.confirm(`Sign out on all devices?
+
+${message}`)) await go(); return; }
+    Alert.alert("Sign out on all devices?", message, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign out everywhere", style: "destructive", onPress: go },
+    ]);
   };
 
   const confirmDelete = () => {
@@ -167,6 +182,10 @@ export default function Profile() {
         <View style={{ marginTop: theme.space["2xl"] }}>
           <Button testID="profile-signout-btn" title="Log out" variant="ghost" onPress={signOut} />
         </View>
+        <Pressable onPress={confirmSignOutEverywhere} testID="profile-signout-all-btn" style={styles.signOutAll} accessibilityRole="button">
+          <Feather name="shield-off" size={16} color={theme.color.onSurfaceSecondary} />
+          <Text style={styles.signOutAllText}>Sign out on all devices</Text>
+        </Pressable>
         <Pressable onPress={confirmDelete} testID="profile-delete-btn" style={styles.deleteBtn}>
           <Feather name="trash-2" size={16} color={theme.color.error} />
           <Text style={styles.deleteText}>Delete account</Text>
@@ -189,6 +208,8 @@ const styles = StyleSheet.create({
   role: { color: theme.color.onSurfaceSecondary, marginTop: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingVertical: theme.space.lg, borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth },
   rowText: { flex: 1, fontSize: theme.font.lg, color: theme.color.onSurface, fontWeight: "500" },
+  signOutAll: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.space.sm, marginTop: theme.space.md, paddingVertical: theme.space.md },
+  signOutAllText: { color: theme.color.onSurfaceSecondary, fontWeight: "700", fontSize: theme.font.base, textDecorationLine: "underline" },
   deleteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: theme.space.sm, marginTop: theme.space.lg, paddingVertical: theme.space.md },
   deleteText: { color: theme.color.error, fontWeight: "700", fontSize: theme.font.base },
   tag: { textAlign: "center", color: theme.color.muted, marginTop: theme.space["2xl"] },

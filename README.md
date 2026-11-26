@@ -51,6 +51,14 @@ and purge W-9s past their retention date.
   ID documents are visible only to the tutor and admins. This is a manual review: plugging in an
   automated provider (Checkr, Certn, a DBS umbrella body…) means replacing the upload step in
   `routes/tutors.py` with that provider's API and webhook.
+- **Sign-in on the website** is kept in a secure cookie that page scripts can't read (not in
+  browser storage), and changes need a security header, so other sites can't act as the user. The
+  phone apps keep their sign-in in the device's secure storage. **Sign out on all devices** (Profile)
+  ends every session at once, e.g. after a lost phone.
+- **Content-Security-Policy:** the website only runs scripts it serves itself (`deploy/Caddyfile`),
+  so injected scripts are blocked. The map uses a copy of Leaflet hosted on the site
+  (`public/map.html`, copied in by `yarn install`). Adding a third-party script (e.g. Stripe's
+  payment form) means adding its domains to that policy.
 - **Deleting an account** removes the person, their messages, photos and push tokens, and cancels
   upcoming sessions. Past bookings and reviews stay, without the name, for the other side's
   history and for accounting. W-9s are kept (still encrypted) for `W9_RETENTION_DAYS` (4 years),

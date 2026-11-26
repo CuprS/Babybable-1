@@ -12,11 +12,17 @@
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(self)"
-		# No embedding in other sites (clickjacking), no plugins, forms only post to this site.
-		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
-		X-Frame-Options "DENY"
+		X-Frame-Options "SAMEORIGIN"
 		-Server
 	}
+
+	# Content-Security-Policy: scripts only from this site (plus the one fixed redirect script on
+	# /api/share pages, allowed by its hash — see backend/routes/seo.py). Injected scripts can't run,
+	# and data can only be sent back to this site. Only other sites may not embed us (clickjacking).
+	# If you add a third-party service (e.g. Stripe's payment form), add its domains here.
+	# Files under /api/files are excluded so browsers' built-in PDF viewers keep working.
+	@csp not path /api/files/*
+	header @csp Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-TYm6zsUzC2a2Nz1KPCd/k0ch4ZuI3ZqqHtCUVbdv2fo='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://tile.openstreetmap.org https://images.unsplash.com https://images.pexels.com; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self' blob:; manifest-src 'self'"
 
 	# Uploads are capped at 10 MB by the API; allow a little headroom for form encoding.
 	request_body {

@@ -192,4 +192,7 @@ basic_auth {
       Stripe payments are built, add the keys and set `ENABLE_MOCK_CONFIRM=false`.
 - [ ] `deploy/.env` stays on the server (it's git-ignored). Keep a copy of it in your password
       manager: without `W9_ENCRYPTION_KEYS`, stored tax IDs can't be decrypted.
+- [ ] After deploying, open the site and check the browser console shows no
+      "Content Security Policy" errors. When you add Stripe (or any outside script), add its
+      domains to the policy in `deploy/Caddyfile` first.
 - [ ] Terms and Privacy Policy reviewed by a lawyer before real families sign up.

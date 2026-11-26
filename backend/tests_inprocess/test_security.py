@@ -162,3 +162,72 @@ def test_signed_links_for_private_images(client, make_user, sofia):
     path, query = link.split("?", 1)
     expired = f"{path}?exp=1000&{query.split('&', 1)[1]}"
     assert client.get(expired).status_code == 401
+
+
+# ---- Website sessions: HttpOnly cookie + CSRF header; sign out everywhere ----
+def _web_client():
+    import server
+    from fastapi.testclient import TestClient
+    # Own cookie jar; https because the session cookie is Secure (as on the live site).
+    return TestClient(server.app, base_url="https://testserver")
+
+
+WEB = {"X-Session-Mode": "cookie", "X-Babybabel-CSRF": "1"}
+
+
+def test_website_session_uses_an_httponly_cookie(make_user):
+    web = _web_client()
+    email = f"web-{uuid.uuid4().hex[:8]}@example.com"
+    r = web.post("/api/auth/signup", headers=WEB, json={"email": email, "password": "longenough1", "name": "Web Parent", "role": "parent"})
+    assert r.status_code == 201
+    assert r.json()["access_token"] == ""  # nothing a script could read
+    cookie = r.headers["set-cookie"].lower()
+    assert "bb_session=" in cookie and "httponly" in cookie and "samesite=strict" in cookie and "path=/api" in cookie
+    assert web.get("/api/auth/me").status_code == 200
+    # Changes without the custom header (what a forged cross-site form would look like) are refused…
+    assert web.patch("/api/auth/me", json={"name": "Hacked"}).status_code == 403
+    # …and allowed with it.
+    assert web.patch("/api/auth/me", headers=WEB, json={"name": "Web Parent 2"}).json()["name"] == "Web Parent 2"
+    assert web.post("/api/auth/logout", headers=WEB).status_code == 200
+    assert web.get("/api/auth/me").status_code == 401
+
+
+def test_phone_apps_still_get_a_token(client, make_user):
+    u = make_user()
+    r = client.post("/api/auth/login", json={"email": u["email"], "password": "longenough1"})
+    assert r.json()["access_token"] and "set-cookie" not in r.headers
+
+
+def test_sign_out_everywhere(client, make_user):
+    u = make_user()
+    web = _web_client()
+    web.post("/api/auth/login", headers=WEB, json={"email": u["email"], "password": "longenough1"})
+    phone = client.post("/api/auth/login", json={"email": u["email"], "password": "longenough1"}).json()["access_token"]
+    assert client.post("/api/auth/logout-all", headers=H(phone)).status_code == 200
+    assert client.get("/api/auth/me", headers=H(phone)).status_code == 401
+    assert client.get("/api/auth/me", headers=u["h"]).status_code == 401
+    assert web.get("/api/auth/me").status_code == 401  # the browser session is gone too
+    # Signing in again works.
+    assert client.post("/api/auth/login", json={"email": u["email"], "password": "longenough1"}).status_code == 200
+
+
+def test_share_page_script_matches_the_csp_hash():
+    """The site's CSP allows exactly one inline script (share-page redirect) by hash. If the script
+    changes, the hash in deploy/Caddyfile must change too, or people won't be redirected."""
+    import base64
+    import hashlib
+    import re
+    from pathlib import Path
+
+    from routes.seo import REDIRECT_JS
+    digest = "sha256-" + base64.b64encode(hashlib.sha256(REDIRECT_JS.encode()).digest()).decode()
+    caddyfile = (Path(__file__).resolve().parents[2] / "deploy" / "Caddyfile").read_text(encoding="utf-8")
+    assert f"'{digest}'" in caddyfile, f"update the script hash in deploy/Caddyfile to {digest}"
+    assert re.search(r"script-src 'self' 'sha256-[^']+';", caddyfile), "script-src must stay strict"
+
+
+def test_share_page_has_one_fixed_script(client, sofia):
+    html = client.get(f"/api/share/tutor/{sofia['profile']['id']}").text
+    from routes.seo import REDIRECT_JS
+    assert html.count("<script>") == 1 and f"<script>{REDIRECT_JS}</script>" in html
+    assert 'rel="canonical"' in html

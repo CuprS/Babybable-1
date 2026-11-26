@@ -5,6 +5,8 @@
 FROM node:22-bookworm-slim AS build
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/yarn.lock ./
+# The postinstall step copies Leaflet (the web map library) into public/vendor.
+COPY frontend/scripts ./scripts
 RUN corepack enable \
     && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 yarn install --frozen-lockfile --non-interactive --network-timeout 600000
 COPY frontend/ ./
