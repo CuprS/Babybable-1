@@ -176,8 +176,9 @@ export function bookingStatus(b: Booking): { label: string; tone: "success" | "w
 export interface Review {
   id: string;
   tutor_id: string;
-  parent_id: string;
-  parent_name: string;
+  booking_id?: string | null;
+  parent_id?: string | null; // not included in the public list
+  parent_name: string; // first name + initial in public lists
   rating: number;
   comment: string;
   created_at: string;

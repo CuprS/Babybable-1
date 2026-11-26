@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import Slider from "@react-native-community/slider";
 import { apiFetch, apiUpload, fileUrl } from "@/src/api";
+import { PrivateImage } from "@/src/privatefile";
 import { theme } from "@/src/theme";
 import { Button, Input } from "@/src/ui";
 import { useAuth } from "@/src/auth";
@@ -176,7 +177,7 @@ export default function EditParent() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: theme.space.md }}>
                 <Pressable onPress={() => uploadChildAvatar(i)} testID={`child-avatar-${i}`}>
                   {c.avatar_url ? (
-                    <Image source={{ uri: fileUrl(c.avatar_url) }} style={styles.childAvatar} contentFit="cover" />
+                    <PrivateImage path={c.avatar_url} style={styles.childAvatar} />
                   ) : (
                     <View style={[styles.childAvatar, { alignItems: "center", justifyContent: "center", backgroundColor: theme.color.surface }]}>
                       <Feather name="camera" size={18} color={theme.color.muted} />

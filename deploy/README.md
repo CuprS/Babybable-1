@@ -144,6 +144,17 @@ nightly backup is then copied there too, so a lost server doesn't mean lost data
 
 ### Restoring a backup
 
+Backups are encrypted. Decrypt the one you need first (the passphrase is
+`BACKUP_ENCRYPTION_PASSPHRASE` in `deploy/.env`):
+
+```bash
+cd /var/backups/babybabel
+export BACKUP_ENCRYPTION_PASSPHRASE='…'
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass env:BACKUP_ENCRYPTION_PASSPHRASE \n  -in db-YYYYMMDD-HHMMSS.archive.gz.enc -out db-YYYYMMDD-HHMMSS.archive.gz
+```
+
+Then restore it:
+
 ```bash
 cd /opt/babybabel/deploy
 # Database (replaces the current data):
@@ -173,6 +184,9 @@ basic_auth {
 - [ ] SSH works with your key, and password login is off (the default when you choose an SSH key).
 - [ ] Hetzner firewall attached; `ufw status` shows only 22, 80 and 443.
 - [ ] Hetzner server backups on; `BACKUP_S3_BUCKET` set for off-site copies.
+- [ ] `BACKUP_ENCRYPTION_PASSPHRASE` saved in your password manager (the nightly backups are
+      encrypted with it; Hetzner's own server snapshots are not, so keep the Hetzner account
+      protected with two-factor sign-in).
 - [ ] Payments: while they're mocked (`ENABLE_MOCK_CONFIRM=true`, Stripe keys empty) no money
       moves, and anyone can mark their own booking paid. Tell testers it's a pilot. When real
       Stripe payments are built, add the keys and set `ENABLE_MOCK_CONFIRM=false`.

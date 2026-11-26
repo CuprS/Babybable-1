@@ -41,8 +41,9 @@ export default function BookingDetail() {
       const data = await apiFetch<Booking>(`/bookings/${id}`);
       setB(data);
       if (user?.role === "parent") {
-        const reviews = await apiFetch<{ booking_id?: string; parent_id: string }[]>(`/reviews/tutor/${data.tutor_id}`).catch(() => []);
-        setHasReviewed(reviews.some((r) => r.booking_id === data.id && r.parent_id === user.id));
+        // The public list carries no account ids; the booking id is enough (this booking is ours).
+        const reviews = await apiFetch<{ booking_id?: string }[]>(`/reviews/tutor/${data.tutor_id}`).catch(() => []);
+        setHasReviewed(reviews.some((r) => r.booking_id === data.id));
       }
     } catch {} finally { setLoading(false); }
   }, [id, user]);

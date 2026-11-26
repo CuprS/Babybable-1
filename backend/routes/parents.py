@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from core import blocked_between, current_user, db, geocode, now_iso
+from core import blocked_between, check_own_files, current_user, db, geocode, now_iso
 from models import Child, EventIn, ParentProfile, ParentProfileUpdate
 from routes.messages import users_have_relationship
 
@@ -53,6 +53,10 @@ async def update_parent_profile(patch: ParentProfileUpdate, u: dict = Depends(cu
         raise HTTPException(403, "Only parents")
     prev = await db.parents.find_one({"user_id": u["id"]}, {"_id": 0}) or {}
     update = patch.model_dump(exclude_none=True)
+    # Photos must be the family's own uploads (or ones already on the profile).
+    current = [prev.get("avatar_url"), u.get("avatar_url")] + [c.get("avatar_url") for c in prev.get("children", [])]
+    wanted = [update.get("avatar_url")] + [c.get("avatar_url") for c in update.get("children", [])]
+    await check_own_files(u["id"], wanted, current)
     if update:
         await db.parents.update_one({"user_id": u["id"]}, {"$set": update}, upsert=True)
         user_patch = {k: v for k, v in update.items() if k in ("name", "avatar_url")}

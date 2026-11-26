@@ -10,7 +10,7 @@ from starlette.concurrency import run_in_threadpool
 import storage
 from booking_service import cancel_booking
 from core import (
-    SUSPENDED_MSG, W9_RETENTION_DAYS, booking_start_utc, current_user,
+    SUSPENDED_MSG, W9_RETENTION_DAYS, booking_start_utc, check_own_files, current_user,
     current_user_even_if_paused, db, email_fingerprint, email_is_verified, hash_password, hash_secret,
     logger, make_token, new_code, now_iso, now_utc, rate_limit, tutor_profile_id, valid_timezone,
     verify_password,
@@ -158,6 +158,8 @@ async def update_me(patch: UserUpdate, u: dict = Depends(current_user)):
     update = patch.model_dump(exclude_none=True)
     if "timezone" in update and not valid_timezone(update["timezone"]):
         raise HTTPException(422, "Unknown time zone")
+    if "avatar_url" in update:
+        await check_own_files(u["id"], [update["avatar_url"]], [u.get("avatar_url")])
     if update:
         await db.users.update_one({"id": u["id"]}, {"$set": update})
         profile_update = {k: v for k, v in update.items() if k in ("name", "avatar_url")}
@@ -175,7 +177,7 @@ async def update_me(patch: UserUpdate, u: dict = Depends(current_user)):
 # ---- Email verification ----
 @router.post("/auth/verify-email", response_model=UserPublic)
 async def verify_email(body: VerifyEmailRequest, request: Request, u: dict = Depends(current_user)):
-    rate_limit("verify", max_hits=10, per_seconds=900, request=request, key=u["id"])
+    rate_limit("verify", max_hits=10, per_seconds=900, request=request, key=u["id"], per_ip=False)
     if email_is_verified(u):
         return user_to_public(u)
     if not await _check_code(u, "verify", body.code):
@@ -198,6 +200,7 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     """Always answers the same way, so it can't be used to find out who has an account."""
     email = body.email.lower().strip()
     rate_limit("forgot", max_hits=5, per_seconds=3600, request=request, key=email)
+    rate_limit("forgot-any-ip", max_hits=5, per_seconds=3600, request=request, key=email, per_ip=False)
     u = await db.users.find_one({"email": email}, {"_id": 0})
     if u:
         await _email_code(email, "reset", await _issue_code(u, "reset"))
@@ -208,6 +211,7 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
 async def reset_password(body: ResetPasswordRequest, request: Request):
     email = body.email.lower().strip()
     rate_limit("reset", max_hits=10, per_seconds=900, request=request, key=email)
+    rate_limit("reset-any-ip", max_hits=10, per_seconds=900, request=request, key=email, per_ip=False)
     u = await db.users.find_one({"email": email}, {"_id": 0})
     if not u or not await _check_code(u, "reset", body.code):
         raise HTTPException(400, "That code is invalid or has expired. Request a new one.")

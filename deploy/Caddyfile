@@ -12,6 +12,9 @@
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(self)"
+		# No embedding in other sites (clickjacking), no plugins, forms only post to this site.
+		Content-Security-Policy "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'"
+		X-Frame-Options "DENY"
 		-Server
 	}
 

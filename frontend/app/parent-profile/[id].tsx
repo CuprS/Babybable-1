@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { apiFetch, fileUrl } from "@/src/api";
+import { PrivateImage } from "@/src/privatefile";
 import { useAuth } from "@/src/auth";
 import { theme } from "@/src/theme";
 import { flagFor } from "@/src/flags";
@@ -149,7 +150,7 @@ export default function ParentPublic() {
             {parent.children.map((c, i) => (
               <View key={c.id ?? i} style={styles.childCard} testID={`public-child-${i}`}>
                 {isOwner && c.avatar_url ? (
-                  <Image source={{ uri: fileUrl(c.avatar_url) }} style={styles.childAvatar} contentFit="cover" />
+                  <PrivateImage path={c.avatar_url} style={styles.childAvatar} />
                 ) : (
                   <View style={[styles.childAvatar, styles.avatarFallback]}>
                     <Feather name="user" size={22} color="#fff" />

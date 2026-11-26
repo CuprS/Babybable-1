@@ -18,6 +18,8 @@ S3_ENDPOINT_URL="$(env_get S3_ENDPOINT_URL)"
 S3_REGION="$(env_get S3_REGION)"
 export AWS_ACCESS_KEY_ID="$(env_get AWS_ACCESS_KEY_ID)"
 export AWS_SECRET_ACCESS_KEY="$(env_get AWS_SECRET_ACCESS_KEY)"
+# Backups hold every family's details, so they're encrypted (AES-256) before leaving this script.
+export BACKUP_ENCRYPTION_PASSPHRASE="$(env_get BACKUP_ENCRYPTION_PASSPHRASE)"
 DEST=/var/backups/babybabel
 STAMP="$(date -u +%Y%m%d-%H%M%S)"
 KEEP="${BACKUP_KEEP_DAYS:-14}"
@@ -36,6 +38,18 @@ if [[ "${STORAGE_BACKEND:-local}" == "local" ]]; then
   docker run --rm -v babybabel_uploads:/data:ro -v "$DEST":/out alpine \
     tar -czf "/out/uploads-$STAMP.tar.gz" -C /data .
   FILES+=("$DEST/uploads-$STAMP.tar.gz")
+fi
+
+if [[ -n "${BACKUP_ENCRYPTION_PASSPHRASE:-}" ]]; then
+  ENCRYPTED=()
+  for f in "${FILES[@]}"; do
+    openssl enc -aes-256-cbc -pbkdf2 -iter 200000 -salt -pass env:BACKUP_ENCRYPTION_PASSPHRASE -in "$f" -out "$f.enc"
+    shred -u "$f" 2>/dev/null || rm -f "$f"
+    ENCRYPTED+=("$f.enc")
+  done
+  FILES=("${ENCRYPTED[@]}")
+else
+  echo "[$STAMP] WARNING: BACKUP_ENCRYPTION_PASSPHRASE is empty — backups are NOT encrypted"
 fi
 
 if [[ -n "${BACKUP_S3_BUCKET:-}" ]]; then

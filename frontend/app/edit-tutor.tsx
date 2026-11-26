@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
@@ -7,6 +7,7 @@ import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { apiFetch, apiUpload, deviceTimeZone, fileUrl, Tutor, zoneLabel } from "@/src/api";
+import { PrivateImage, openPrivateFile } from "@/src/privatefile";
 import { theme } from "@/src/theme";
 import { Button, Input, VerifiedBadge } from "@/src/ui";
 import { useToast } from "@/src/toast";
@@ -244,7 +245,7 @@ export default function EditTutor() {
         <View style={styles.accredRow}>
           {tutor?.accreditation_photo_url ? (
             <Pressable onPress={() => uploadKey("accred_photo")} style={styles.accredCard} testID="edit-accred-photo">
-              <Image source={{ uri: fileUrl(tutor.accreditation_photo_url) }} style={StyleSheet.absoluteFill as any} contentFit="cover" />
+              <PrivateImage path={tutor.accreditation_photo_url} style={StyleSheet.absoluteFill as any} />
               <Pressable onPress={clearAccredPhoto} style={styles.removeBadge} testID="edit-accred-photo-remove" hitSlop={8}>
                 <Feather name="x" size={14} color="#fff" />
               </Pressable>
@@ -268,7 +269,7 @@ export default function EditTutor() {
               </Text>
               <View style={{ flexDirection: "row", gap: 4 }}>
                 <Pressable
-                  onPress={() => Linking.openURL(fileUrl(tutor.accreditation_document_url!) || "")}
+                  onPress={() => openPrivateFile(tutor.accreditation_document_url)}
                   style={styles.docBtnSmall}
                   testID="edit-accred-doc-open"
                 >

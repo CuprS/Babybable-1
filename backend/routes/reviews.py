@@ -10,6 +10,16 @@ from models import Review, ReviewCreate
 router = APIRouter()
 
 
+def public_name(full: str) -> str:
+    """'Patricia Longsurname' -> 'Patricia L.' — reviews are public, families' full names aren't."""
+    parts = (full or "").split()
+    if not parts:
+        return "A Babybabel parent"
+    if full.strip() in ("Former Babybabel parent", "A Babybabel parent"):
+        return full.strip()
+    return parts[0] if len(parts) == 1 else f"{parts[0]} {parts[-1][0].upper()}."
+
+
 async def recompute_tutor_rating(tutor_id: str) -> None:
     agg = await db.reviews.aggregate([
         {"$match": {"tutor_id": tutor_id}},
@@ -40,7 +50,7 @@ async def create_review(body: ReviewCreate, u: dict = Depends(current_user)):
         raise HTTPException(409, "You've already reviewed this session.")
     r = {
         "id": str(uuid.uuid4()), "tutor_id": body.tutor_id, "booking_id": body.booking_id,
-        "parent_id": u["id"], "parent_name": u["name"], "rating": body.rating,
+        "parent_id": u["id"], "parent_name": public_name(u["name"]), "rating": body.rating,
         "comment": body.comment.strip(), "created_at": now_iso(),
     }
     await db.reviews.insert_one(r)
@@ -51,5 +61,6 @@ async def create_review(body: ReviewCreate, u: dict = Depends(current_user)):
 
 @router.get("/reviews/tutor/{tutor_id}", response_model=List[Review])
 async def tutor_reviews(tutor_id: str):
+    """Public. No account ids, and older reviews' full names are shortened too."""
     docs = await db.reviews.find({"tutor_id": tutor_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
-    return [Review(**d) for d in docs]
+    return [Review(**{**d, "parent_id": None, "parent_name": public_name(d.get("parent_name", ""))}) for d in docs]

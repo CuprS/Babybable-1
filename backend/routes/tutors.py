@@ -6,7 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from starlette.concurrency import run_in_threadpool
 
 from core import (
-    ACTIVE_STATUSES, WEEKDAYS, _normalize_slot, blocked_between, blocked_user_ids, current_user, db, is_tutor_verified,
+    ACTIVE_STATUSES, WEEKDAYS, _normalize_slot, blocked_between, blocked_user_ids, check_own_files, current_user, db,
+    is_tutor_verified,
     geocode, haversine_miles, notify_admins, now_iso, optional_user, push_notification, require_admin,
     slot_minutes, valid_timezone,
 )
@@ -145,6 +146,8 @@ async def update_my_tutor_profile(patch: TutorProfileUpdate, u: dict = Depends(c
     update = patch.model_dump(exclude_none=True)
     if "timezone" in update and not valid_timezone(update["timezone"]):
         raise HTTPException(422, "Unknown time zone")
+    file_fields = ("avatar_url", "hero_image_url", "accreditation_photo_url", "accreditation_document_url")
+    await check_own_files(u["id"], [update.get(f) for f in file_fields], [(prev or {}).get(f) for f in file_fields])
     # Multi-location: geocode each and store as list of {name, lat, lng}.
     if "locations" in update:
         raw = [s.strip() for s in update["locations"] if s and s.strip()]

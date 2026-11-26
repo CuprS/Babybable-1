@@ -32,6 +32,13 @@ async def insert_booking(booking: dict) -> None:
     booking.pop("_id", None)
 
 
+def booking_view(b: dict, side: str) -> Booking:
+    """Stripe's payment details (the client secret) belong only to the family paying."""
+    if side != "parent":
+        b = {**b, "client_secret": None, "stripe_payment_intent_id": None}
+    return Booking(**b)
+
+
 async def _load_for(booking_id: str, u: dict) -> tuple[dict, str]:
     """Fetch a booking and the caller's side of it ('parent' | 'tutor' | 'admin')."""
     b = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
@@ -167,13 +174,13 @@ async def my_bookings(u: dict = Depends(current_user)):
     else:
         return []
     docs = await db.bookings.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
-    return [Booking(**d) for d in docs]
+    return [booking_view(d, "parent" if u["role"] == "parent" else "tutor") for d in docs]
 
 
 @router.get("/bookings/{booking_id}", response_model=Booking)
 async def get_booking(booking_id: str, u: dict = Depends(current_user)):
-    b, _ = await _load_for(booking_id, u)
-    return Booking(**b)
+    b, side = await _load_for(booking_id, u)
+    return booking_view(b, side)
 
 
 @router.get("/bookings/{booking_id}/cancel-preview")
@@ -192,7 +199,7 @@ async def cancel(booking_id: str, body: Optional[CancelRequest] = None, u: dict 
     start = booking_start_utc(b)
     if start and start + timedelta(minutes=int(b.get("duration_minutes") or 60)) < now_utc():
         raise HTTPException(400, "This session has already taken place.")
-    return Booking(**await cancel_booking(b, by_role=side, reason=(body.reason if body else "") or ""))
+    return booking_view(await cancel_booking(b, by_role=side, reason=(body.reason if body else "") or ""), side)
 
 
 @router.post("/bookings/{booking_id}/respond", response_model=Booking)
@@ -204,7 +211,7 @@ async def respond(booking_id: str, body: RespondRequest, u: dict = Depends(curre
         raise HTTPException(400, "This booking was already answered.")
     if not body.accept:
         b = await cancel_booking(b, by_role="tutor", reason=body.note or "Declined by tutor")
-        return Booking(**b)
+        return booking_view(b, side)
     res = await db.bookings.update_one({"id": b["id"], "tutor_response": "pending"}, {"$set": {"tutor_response": "accepted", "accepted_at": now_iso()}})
     if res.modified_count == 0:
         raise HTTPException(400, "This booking was already answered.")
@@ -213,7 +220,7 @@ async def respond(booking_id: str, body: RespondRequest, u: dict = Depends(curre
     if body.note:
         msg += f" “{body.note.strip()[:120]}”"
     await push_notification(b["parent_id"], "booking", "Booking confirmed", msg, {"booking_id": b["id"]})
-    return Booking(**b)
+    return booking_view(b, side)
 
 
 @router.post("/bookings/{booking_id}/reschedule", response_model=Booking)
@@ -256,7 +263,7 @@ async def reschedule(booking_id: str, body: RescheduleRequest, u: dict = Depends
     if other:
         await push_notification(other, "booking", "Session moved", f"{who} moved your session to {body.date} at {new_time}.", {"booking_id": b["id"]})
     b.pop("slot_key", None)
-    return Booking(**b)
+    return booking_view(b, side)
 
 
 @router.post("/stripe/webhook")

@@ -270,7 +270,7 @@ class Review(BaseModel):
     id: str
     tutor_id: str
     booking_id: Optional[str] = None
-    parent_id: str
+    parent_id: Optional[str] = None  # never included in the public list
     parent_name: str
     rating: int
     comment: str

@@ -294,7 +294,8 @@ def test_share_pages_and_sitemap(client, sofia):
 def test_upload_round_trip_and_private_files(client, make_user):
     u = make_user()
     up = client.post("/api/uploads", headers=u["h"], files={"file": ("a.png", b"\x89PNG-bytes", "image/png")}).json()
-    r = client.get(up["url"])
+    assert client.get(up["url"]).status_code == 401  # not used anywhere yet -> owner only
+    r = client.get(up["url"], headers=u["h"])
     assert r.status_code == 200 and r.content == b"\x89PNG-bytes" and r.headers["content-type"] == "image/png"
     assert r.headers["x-content-type-options"] == "nosniff"
     assert client.get("/api/files/babybabel/uploads/nobody/missing.png").status_code == 404

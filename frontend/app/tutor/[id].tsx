@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Dimensions, Linking } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Dimensions } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -11,6 +11,7 @@ import { theme } from "@/src/theme";
 import { flagFor } from "@/src/flags";
 import { StaticMap, MapMarker } from "@/src/staticmap";
 import { VerifiedBadge } from "@/src/ui";
+import { PrivateImage, openPrivateFile } from "@/src/privatefile";
 import Head from "expo-router/head";
 
 const { width: SCREEN_W } = Dimensions.get("window");
@@ -126,11 +127,7 @@ export default function TutorDetail() {
               <Text style={styles.section}>Accreditations</Text>
               <View style={styles.accredWrap}>
                 {tutor.accreditation_photo_url && (
-                  <Image
-                    source={{ uri: fileUrl(tutor.accreditation_photo_url) }}
-                    style={styles.accredImg}
-                    contentFit="cover"
-                  />
+                  <PrivateImage path={tutor.accreditation_photo_url} style={styles.accredImg} />
                 )}
                 {/* Legacy list fallback */}
                 {!tutor.accreditation_photo_url && tutor.accreditation_urls && tutor.accreditation_urls.slice(0, 1).map((u, i) => (
@@ -138,7 +135,7 @@ export default function TutorDetail() {
                 ))}
                 {tutor.accreditation_document_url && (
                   <Pressable
-                    onPress={() => Linking.openURL(fileUrl(tutor.accreditation_document_url!) || "")}
+                    onPress={() => openPrivateFile(tutor.accreditation_document_url)}
                     style={styles.accredDoc}
                     testID="tutor-accred-doc"
                   >

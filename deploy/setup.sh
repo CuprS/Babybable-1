@@ -84,6 +84,8 @@ if [[ ! -f .env ]]; then
   set_var MONGO_APP_PASSWORD "$(rand_hex 24)"
   set_var JWT_SECRET "$(rand_hex 32)"
   set_var W9_ENCRYPTION_KEYS "$(fernet_key)"
+  BACKUP_PASS="$(rand_hex 32)"
+  set_var BACKUP_ENCRYPTION_PASSPHRASE "$BACKUP_PASS"
   ADMIN_PW="$(rand_hex 12)"
   set_var ADMIN_INITIAL_PASSWORD "$ADMIN_PW"
   set_var EMAIL_FROM "Babybabel <hello@${DOMAIN}>"
@@ -121,6 +123,9 @@ if [[ "$NEW_ENV" == 1 ]]; then
   echo "  Admin login: $EMAIL"
   echo "  Admin password: $ADMIN_PW"
   echo "  Save it in a password manager. To change it later, use Forgot password once email is set up."
+  echo
+  echo "  Backup encryption passphrase: $BACKUP_PASS"
+  echo "  Save it too — backups can't be restored without it. (Also in deploy/.env.)"
   echo
   echo "  Next: add your email provider (RESEND_API_KEY) and, if you want, Hetzner Object Storage"
   echo "  keys to $APP_DIR/deploy/.env, then run: $APP_DIR/deploy/update.sh"

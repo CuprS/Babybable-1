@@ -160,9 +160,10 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def rate_limit(bucket: str, max_hits: int, per_seconds: int, request: Request, key: str = "") -> None:
-    """Sliding-window rate limit keyed by bucket + IP (+ optional extra key, e.g. an email)."""
-    k = f"{bucket}:{_client_ip(request)}:{key}"
+def rate_limit(bucket: str, max_hits: int, per_seconds: int, request: Request, key: str = "", per_ip: bool = True) -> None:
+    """Sliding-window rate limit keyed by bucket + IP (+ optional extra key, e.g. an email).
+    per_ip=False counts the key across all IPs, so rotating addresses doesn't help an attacker."""
+    k = f"{bucket}:{_client_ip(request) if per_ip else '*'}:{key}"
     now = time.time()
     with _rate_lock:
         dq = _rate_buckets[k]
@@ -579,7 +580,7 @@ async def push_notification(user_id: str, kind: str, title: str, body: str, data
         "id": str(uuid.uuid4()), "user_id": user_id, "kind": kind,
         "title": title, "body": body, "read": False, "at": now_iso(),
     })
-    run_in_background(send_push(user_id, title, body, {"kind": kind, **(data or {})}))
+    run_in_background(send_push(user_id, title, push_text(kind, body), {"kind": kind, **(data or {})}))
 
 
 async def notify_once(user_id: str, kind: str, title: str, body: str, data: Optional[dict] = None) -> bool:
@@ -607,3 +608,48 @@ TUTOR_NOT_VERIFIED_MSG = ("Finish identity and background verification before of
 
 def is_tutor_verified(t: Optional[dict]) -> bool:
     return bool(t) and t.get("verification_status") == "verified"
+
+
+# ---- Signed, short-lived links to private files ----
+# Images and documents can't send the sign-in header, so after checking access the API hands
+# out a link that works for one file for a few minutes (like an S3 pre-signed URL).
+_FILE_URL_KEY = hashlib.sha256(b"babybabel-file-url:" + JWT_SECRET.encode()).digest()
+FILE_URL_MINUTES = 15
+
+
+def _file_sig(path: str, exp: int) -> str:
+    import hmac
+    return hmac.new(_FILE_URL_KEY, f"{path}|{exp}".encode(), hashlib.sha256).hexdigest()[:40]
+
+
+def signed_file_url(path: str, minutes: int = FILE_URL_MINUTES) -> str:
+    exp = int(time.time()) + minutes * 60
+    return f"/api/files/{path}?exp={exp}&sig={_file_sig(path, exp)}"
+
+
+def file_signature_ok(path: str, exp: Optional[str], sig: Optional[str]) -> bool:
+    import hmac
+    try:
+        exp_i = int(exp or "0")
+    except ValueError:
+        return False
+    if not sig or exp_i < time.time() or exp_i > time.time() + 24 * 3600:
+        return False
+    return hmac.compare_digest(sig, _file_sig(path, exp_i))
+
+
+async def check_own_files(user_id: str, new_values: list, current_values: list) -> None:
+    """A profile may only point at files its owner uploaded (or keep what it already has).
+    Stops someone saving another family's private photo path into their own profile."""
+    allowed = {v for v in current_values if v}
+    for v in new_values:
+        if not v or v in allowed:
+            continue
+        path = str(v).split("/api/files/", 1)[-1].split("?", 1)[0]
+        if not await db.uploads.find_one({"path": path, "owner_id": user_id}, {"_id": 1}):
+            raise HTTPException(422, "Photos and documents must be uploaded from your own device.")
+
+
+def push_text(kind: str, body: str) -> str:
+    """What a push notification shows on a lock screen. Message text stays inside the app."""
+    return "Open Babybabel to read it." if kind in ("chat", "invitation") else body
