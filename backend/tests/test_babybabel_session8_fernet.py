@@ -32,6 +32,7 @@ if BACKEND_DIR not in sys.path:
 
 import server  # noqa: E402
 from motor.motor_asyncio import AsyncIOMotorClient  # noqa: E402
+from _support import admin_credentials, admin_session  # noqa: E402
 
 # One persistent event loop for direct server.* async calls so motor's client
 # doesn't get orphaned between asyncio.run() calls (each of which closes the loop).
@@ -57,8 +58,6 @@ SOFIA_EMAIL = "sofia@babybabel.dev"
 SOFIA_PW = "password123"
 PARENT_EMAIL = "parent@test.dev"
 PARENT_PW = "password123"
-ADMIN_EMAIL = "copperstone17@gmail.com"
-ADMIN_PW = "REDACTED-PASSWORD"
 
 
 def _auth(token):
@@ -112,7 +111,7 @@ def parent_ctx():
 
 @pytest.fixture(scope="module")
 def admin_ctx():
-    return _login(ADMIN_EMAIL, ADMIN_PW)
+    return admin_session()
 
 
 # ===========================================================================

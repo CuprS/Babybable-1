@@ -63,3 +63,35 @@ def restart_backend(wait_seconds: int = 30) -> None:
         except requests.RequestException:
             pass
     pytest.fail("API didn't come back after restart")
+
+
+# ---- Admin sign-in (password + emailed code) ----
+# The admin address and password come from the backend's environment (backend/.env or the CI
+# settings), never from this public repository.
+def admin_credentials() -> tuple:
+    env = backend_env()
+    env.update({k: v for k, v in os.environ.items() if k in ("ADMIN_EMAIL", "ADMIN_INITIAL_PASSWORD")})
+    email, password = env.get("ADMIN_EMAIL", "").strip().lower(), env.get("ADMIN_INITIAL_PASSWORD", "")
+    if not email or not password:
+        pytest.skip("needs ADMIN_EMAIL and ADMIN_INITIAL_PASSWORD for the API under test")
+    return email, password
+
+
+def admin_session() -> dict:
+    """Signs in as the admin the way a person does: password, then the 6-digit code. The test
+    can't read the email, so it swaps the stored code for a known one (codes are stored hashed)."""
+    import hashlib
+    email, password = admin_credentials()
+    url = f"{backend_url()}/api/auth/login"
+    first = requests.post(url, json={"email": email, "password": password}, timeout=30)
+    assert first.status_code == 428, f"admin login should ask for a code: {first.status_code} {first.text}"
+    db = mongo_db()
+    admin = db.users.find_one({"email": email}, {"_id": 0, "id": 1})
+    code = "246810"
+    db.auth_codes.update_one(
+        {"user_id": admin["id"], "purpose": "admin_login"},
+        {"$set": {"code_hash": hashlib.sha256(code.encode()).hexdigest(), "attempts": 0}},
+    )
+    r = requests.post(url, json={"email": email, "password": password, "code": code}, timeout=30)
+    assert r.status_code == 200, f"admin login failed: {r.status_code} {r.text}"
+    return r.json()

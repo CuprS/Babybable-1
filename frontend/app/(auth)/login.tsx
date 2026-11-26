@@ -13,15 +13,24 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  // The admin account has a second step: a 6-digit code emailed after the password is accepted.
+  const [needsCode, setNeedsCode] = useState(false);
+  const [code, setCode] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     setLoading(true); setError("");
     try {
-      await signIn(email.trim(), password);
-      router.replace("/(tabs)");
+      const u = await signIn(email.trim(), password, needsCode ? code.trim() : undefined);
+      router.replace(u.is_admin ? "/admin" : "/(tabs)");
     } catch (e: any) {
-      setError(e?.message || "Login failed");
+      if (e?.status === 428) {
+        setNeedsCode(true); setCode(""); setNotice(e.message);
+      } else {
+        if (needsCode && e?.status === 400) { setNeedsCode(false); setCode(""); setNotice(""); }
+        setError(e?.message || "Login failed");
+      }
     } finally { setLoading(false); }
   };
 
@@ -39,8 +48,14 @@ export default function Login() {
           <View style={{ gap: theme.space.lg, marginTop: theme.space.xl }}>
             <Input testID="login-email-input" label="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} placeholder="you@example.com" />
             <Input testID="login-password-input" label="Password" secureTextEntry value={password} onChangeText={setPassword} placeholder="Your password" />
+            {needsCode ? (
+              <>
+                {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+                <Input testID="login-code-input" label="Sign-in code" keyboardType="number-pad" maxLength={6} autoComplete="one-time-code" value={code} onChangeText={setCode} placeholder="6-digit code" />
+              </>
+            ) : null}
             {error ? <Text testID="login-error" style={styles.error}>{error}</Text> : null}
-            <Button testID="login-submit-button" title="Log in" onPress={submit} loading={loading} />
+            <Button testID="login-submit-button" title={needsCode ? "Finish signing in" : "Log in"} onPress={submit} loading={loading} />
             <Pressable
               onPress={() => router.push({ pathname: "/(auth)/forgot-password", params: { email: email.trim() } })}
               testID="login-forgot"
@@ -66,5 +81,6 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5 },
   subtitle: { fontSize: theme.font.lg, color: theme.color.onSurfaceSecondary, marginTop: theme.space.sm },
   error: { color: theme.color.error, fontSize: theme.font.base },
+  notice: { color: theme.color.onSurface, fontSize: theme.font.base, lineHeight: 22 },
   link: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.base, marginTop: theme.space.sm },
 });

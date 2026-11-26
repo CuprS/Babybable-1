@@ -24,6 +24,7 @@ import pymongo
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dotenv import load_dotenv
+from _support import admin_credentials, admin_session  # noqa: E402
 
 # Load backend .env so we can talk to Mongo directly for setup/teardown of stale test data.
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
@@ -36,8 +37,6 @@ SOFIA_EMAIL = "sofia@babybabel.dev"
 SOFIA_PW = "password123"
 PARENT_EMAIL = "parent@test.dev"
 PARENT_PW = "password123"
-ADMIN_EMAIL = "copperstone17@gmail.com"
-ADMIN_PW = "REDACTED-PASSWORD"
 
 
 def next_monday_iso():
@@ -88,9 +87,7 @@ def parent_token():
 
 @pytest.fixture(scope="session")
 def admin_token():
-    r = _login(ADMIN_EMAIL, ADMIN_PW)
-    assert r.status_code == 200, f"Admin login failed: {r.status_code} {r.text}"
-    return r.json()["access_token"]
+    return admin_session()["access_token"]
 
 
 @pytest.fixture(scope="session")

@@ -34,7 +34,7 @@ export async function apiFetch<T = any>(
   if (!res.ok) {
     const msg = errorMessage(data, res.status);
     if (res.status === 423) suspendedHandler?.(msg);
-    throw new Error(msg);
+    throw Object.assign(new Error(msg), { status: res.status });
   }
   return data as T;
 }

@@ -29,7 +29,8 @@ function AuthGate() {
     const inAdmin = segments[0] === "admin";
     if (!user && suspended && segments[0] !== "suspended" && segments[0] !== "support") {
       router.replace("/suspended");
-    } else if (!user && !inAuth && !isPublic) {
+    } else if (!user && !inAuth && !isPublic && !inAdmin) {
+      // (/admin isn't sent to sign-in: to anyone but the admin it looks like a page that doesn't exist.)
       router.replace("/onboarding");
     } else if (user && inAuth) {
       router.replace(user.is_admin ? "/admin" : "/(tabs)");

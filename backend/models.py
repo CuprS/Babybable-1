@@ -20,7 +20,8 @@ class SignupRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(max_length=200)
+    code: Optional[str] = Field(default=None, max_length=12)  # admin sign-in only
 
 
 class UserPublic(BaseModel):

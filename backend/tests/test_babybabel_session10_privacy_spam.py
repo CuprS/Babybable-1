@@ -12,6 +12,7 @@ import pytest
 import requests
 
 from _support import backend_env, backend_url, mongo_db  # noqa: E402
+from _support import admin_session  # noqa: E402
 
 BASE_URL = backend_url()
 DB = mongo_db()
@@ -89,7 +90,7 @@ class TestParentPublicPrivacy:
 
     def test_admin_sees_profile(self):
         p = make_user("parent", with_profile=True)
-        a = _login("copperstone17@gmail.com", "REDACTED-PASSWORD")
+        a = admin_session()
         r = requests.get(f"{BASE_URL}/api/parents/{p['id']}/public",
                          headers={"Authorization": f"Bearer {a['access_token']}"}, timeout=30)
         assert r.status_code == 200, r.text

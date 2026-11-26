@@ -8,11 +8,10 @@ import uuid
 import time
 import pytest
 import requests
+from _support import admin_credentials, admin_session  # noqa: E402
 
 
 BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "http://localhost:8001").rstrip("/")
-ADMIN_EMAIL = "copperstone17@gmail.com"
-ADMIN_PW = os.environ.get("ADMIN_INITIAL_PASSWORD", "REDACTED-PASSWORD")
 
 
 def _login(email, password):
@@ -23,11 +22,12 @@ def _login(email, password):
 # ---- SEC-001: Admin seed via env var ----
 class TestSEC001AdminSeed:
     def test_admin_login_works_with_env_password(self):
-        r = _login(ADMIN_EMAIL, ADMIN_PW)
-        assert r.status_code == 200, f"admin login failed: {r.status_code} {r.text}"
-        data = r.json()
+        email, password = admin_credentials()
+        # The password alone isn't enough: the admin also needs the emailed code.
+        assert _login(email, password).status_code == 428
+        data = admin_session()
         assert data["user"]["is_admin"] is True
-        assert data["user"]["email"] == ADMIN_EMAIL
+        assert data["user"]["email"] == email
         assert "access_token" in data
 
     def test_no_hardcoded_admin_password_literal(self):
@@ -38,7 +38,6 @@ class TestSEC001AdminSeed:
         # and hash_password("password123") for seed tutors. NO admin literal.
         import re
         # Look for admin-context literal password
-        assert 'hash_password("REDACTED' not in src
         assert 'hash_password("admin' not in src.lower()
 
 

@@ -13,8 +13,8 @@ from core import (
     SUSPENDED_MSG, W9_RETENTION_DAYS, booking_start_utc, check_own_files, clear_session_cookie, set_session_cookie,
     wants_cookie_session, current_user,
     current_user_even_if_paused, db, email_fingerprint, email_is_verified, hash_password, hash_secret,
-    logger, make_token, new_code, now_iso, now_utc, rate_limit, tutor_profile_id, valid_timezone,
-    verify_password,
+    logger, make_token, new_code, now_iso, now_utc, rate_limit, session_minutes, tutor_profile_id,
+    valid_timezone, verify_password,
 )
 from email_service import send_email
 from models import (
@@ -38,9 +38,10 @@ def user_to_public(u: dict) -> UserPublic:
 def issue_session(request: Request, response: Response, user: dict) -> AuthResponse:
     """Phone apps get the token in the body (kept in encrypted device storage). The website asks
     for a cookie session: an HttpOnly cookie scripts can't read, and no token in the body."""
-    token = make_token(user["id"], user["role"], int(user.get("token_version", 0)))
+    minutes = session_minutes(user)
+    token = make_token(user["id"], user["role"], int(user.get("token_version", 0)), minutes, bool(user.get("is_admin")))
     if wants_cookie_session(request):
-        set_session_cookie(response, token)
+        set_session_cookie(response, token, minutes)
         token = ""
     return AuthResponse(access_token=token, user=user_to_public(user))
 
@@ -93,6 +94,10 @@ async def _email_code(to: str, purpose: str, code: str) -> None:
         logger.info(f"[dev] {purpose} code for {to}: {code}")  # local development only
     if purpose == "verify":
         subject, lead = "Your Babybabel verification code", "Use this code in the app to confirm your email address."
+    elif purpose == "admin_login":
+        subject = "Your Babybabel admin sign-in code"
+        lead = ("Someone (hopefully you) entered the admin password. Use this code to finish signing in. "
+                "If it wasn't you, change the admin password now.")
     else:
         subject, lead = "Your Babybabel reset code", "Use this code in the app to choose a new password. If you didn't ask for this, you can ignore this email."
     html = (
@@ -110,6 +115,9 @@ async def _email_code(to: str, purpose: str, code: str) -> None:
 
 
 # ---- Signup / login ----
+ADMIN_CODE_SENT_MSG = "We've emailed a 6-digit sign-in code to the admin address. Enter it to finish signing in."
+
+
 @router.post("/auth/signup", response_model=AuthResponse, status_code=201)
 async def signup(body: SignupRequest, request: Request, response: Response):
     rate_limit("signup", max_hits=5, per_seconds=600, request=request)
@@ -166,11 +174,22 @@ async def signup(body: SignupRequest, request: Request, response: Response):
 
 @router.post("/auth/login", response_model=AuthResponse)
 async def login(body: LoginRequest, request: Request, response: Response):
+    email = body.email.lower().strip()
     rate_limit("login", max_hits=8, per_seconds=300, request=request)
-    u = await db.users.find_one({"email": body.email.lower().strip()})
+    # Counted across all addresses too, so password guessing can't be spread over many IPs.
+    rate_limit("login-any-ip", max_hits=20, per_seconds=900, request=request, key=email, per_ip=False)
+    u = await db.users.find_one({"email": email})
     if not u or not verify_password(body.password, u["password_hash"]):
         raise HTTPException(401, "Invalid email or password")
-    if u.get("suspended") and not u.get("is_admin"):
+    if u.get("is_admin"):
+        # Second step for the admin: a 6-digit code emailed to the admin address.
+        if not body.code:
+            await _email_code(u["email"], "admin_login", await _issue_code(u, "admin_login"))
+            raise HTTPException(428, ADMIN_CODE_SENT_MSG)
+        if not await _check_code(u, "admin_login", body.code):
+            raise HTTPException(400, "That code is invalid or has expired. Log in again to get a new one.")
+        logger.info("admin signed in")
+    elif u.get("suspended"):
         raise HTTPException(423, SUSPENDED_MSG)
     return issue_session(request, response, u)
 
@@ -229,7 +248,9 @@ async def forgot_password(body: ForgotPasswordRequest, request: Request):
     rate_limit("forgot", max_hits=5, per_seconds=3600, request=request, key=email)
     rate_limit("forgot-any-ip", max_hits=5, per_seconds=3600, request=request, key=email, per_ip=False)
     u = await db.users.find_one({"email": email}, {"_id": 0})
-    if u:
+    # The admin password is changed on the server instead (admin_tools.py), so control of the
+    # admin mailbox alone is never enough to take over the admin account.
+    if u and not u.get("is_admin"):
         await _email_code(email, "reset", await _issue_code(u, "reset"))
     return {"ok": True, "message": "If that email has an account, we've sent a 6-digit code to it."}
 
@@ -240,7 +261,7 @@ async def reset_password(body: ResetPasswordRequest, request: Request, response:
     rate_limit("reset", max_hits=10, per_seconds=900, request=request, key=email)
     rate_limit("reset-any-ip", max_hits=10, per_seconds=900, request=request, key=email, per_ip=False)
     u = await db.users.find_one({"email": email}, {"_id": 0})
-    if not u or not await _check_code(u, "reset", body.code):
+    if not u or u.get("is_admin") or not await _check_code(u, "reset", body.code):
         raise HTTPException(400, "That code is invalid or has expired. Request a new one.")
     version = int(u.get("token_version", 0)) + 1  # signs out every existing session
     # Receiving the code proves they own the address, so the email counts as verified too.

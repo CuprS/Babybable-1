@@ -58,8 +58,13 @@ async def enforce_message_limits(u: dict, to_user: dict) -> bool:
 
 @router.post("/messages", response_model=Message)
 async def send_message(body: MessageCreate, u: dict = Depends(current_user)):
-    to_user = await db.users.find_one({"id": body.to_user_id}, {"_id": 0, "id": 1, "role": 1})
+    to_user = await db.users.find_one({"id": body.to_user_id}, {"_id": 0, "id": 1, "role": 1, "is_admin": 1})
     if not to_user:
+        raise HTTPException(404, "Recipient not found")
+    if to_user.get("is_admin") and not u.get("is_admin") and not await db.messages.find_one(
+        {"from_user_id": to_user["id"], "to_user_id": u["id"]}, {"_id": 1},
+    ):
+        # The admin account can't be contacted directly; people can reply once the admin writes.
         raise HTTPException(404, "Recipient not found")
     cold = await enforce_message_limits(u, to_user)
     m = {

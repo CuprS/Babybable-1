@@ -40,6 +40,8 @@ if "change-me" in JWT_SECRET or len(JWT_SECRET) < 32:
     raise RuntimeError("JWT_SECRET is a weak/placeholder value — refusing to start")
 JWT_ALGORITHM = os.environ.get("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_MINUTES = int(os.environ.get("ACCESS_TOKEN_MINUTES", "10080"))
+# Admin sign-ins are short (12 hours by default) and need an emailed code as well as the password.
+ADMIN_SESSION_MINUTES = int(os.environ.get("ADMIN_SESSION_MINUTES", "720"))
 APP_NAME = os.environ.get("APP_NAME", "babybabel")
 # The seeded admin account and the default safety-alert recipient. Set in .env — a personal
 # address shouldn't live in source code (the repo is public).
@@ -413,9 +415,16 @@ def verify_password(p: str, h: str) -> bool:
         return False
 
 
-def make_token(user_id: str, role: str, token_version: int = 0) -> str:
+def session_minutes(user: dict) -> int:
+    return ADMIN_SESSION_MINUTES if user.get("is_admin") else ACCESS_TOKEN_MINUTES
+
+
+def make_token(user_id: str, role: str, token_version: int = 0, minutes: Optional[int] = None, admin: bool = False) -> str:
     now = now_utc()
-    payload = {"sub": user_id, "role": role, "tv": token_version, "iat": now, "exp": now + timedelta(minutes=ACCESS_TOKEN_MINUTES)}
+    payload = {"sub": user_id, "role": role, "tv": token_version, "iat": now,
+               "exp": now + timedelta(minutes=minutes or ACCESS_TOKEN_MINUTES)}
+    if admin:
+        payload["adm"] = True  # only set by the admin sign-in that checked the emailed code
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
 
@@ -438,8 +447,19 @@ def email_fingerprint(email: str) -> str:
 
 
 def _token_valid_for(user: dict, payload: dict) -> bool:
-    """Changing the password bumps token_version, which voids every token issued before."""
-    return int(payload.get("tv", 0)) == int(user.get("token_version", 0))
+    """Changing the password bumps token_version, which voids every token issued before.
+    An admin account only accepts tokens from the admin sign-in (password + emailed code), and
+    only for ADMIN_SESSION_MINUTES, so a token from signup, a password reset or an old session
+    never opens the admin tools."""
+    if int(payload.get("tv", 0)) != int(user.get("token_version", 0)):
+        return False
+    if user.get("is_admin"):
+        if not payload.get("adm"):
+            return False
+        issued = payload.get("iat")
+        if not isinstance(issued, (int, float)) or time.time() - issued > ADMIN_SESSION_MINUTES * 60:
+            return False
+    return True
 
 
 async def _user_from_token(token: Optional[str]) -> Optional[dict]:
@@ -480,9 +500,9 @@ def wants_cookie_session(request: Request) -> bool:
     return request.headers.get("x-session-mode", "").lower() == "cookie"
 
 
-def set_session_cookie(response, token: str) -> None:
+def set_session_cookie(response, token: str, minutes: Optional[int] = None) -> None:
     response.set_cookie(
-        SESSION_COOKIE, token, max_age=ACCESS_TOKEN_MINUTES * 60, httponly=True,
+        SESSION_COOKIE, token, max_age=(minutes or ACCESS_TOKEN_MINUTES) * 60, httponly=True,
         secure=COOKIE_SECURE, samesite="strict", path="/api",
     )
 

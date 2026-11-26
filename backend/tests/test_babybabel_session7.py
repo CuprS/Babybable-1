@@ -36,6 +36,7 @@ import pymongo
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from dotenv import load_dotenv
+from _support import admin_credentials, admin_session  # noqa: E402
 
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
@@ -49,8 +50,6 @@ SOFIA_EMAIL = "sofia@babybabel.dev"
 SOFIA_PW = "password123"
 PARENT_EMAIL = "parent@test.dev"
 PARENT_PW = "password123"
-ADMIN_EMAIL = "copperstone17@gmail.com"
-ADMIN_PW = "REDACTED-PASSWORD"
 
 NOTE_TAG = "TEST_SESSION7"
 
@@ -117,7 +116,7 @@ def parent_ctx():
 
 @pytest.fixture(scope="module")
 def admin_ctx():
-    data = _login(ADMIN_EMAIL, ADMIN_PW)
+    data = admin_session()
     return {"token": data["access_token"], "user": data["user"]}
 
 

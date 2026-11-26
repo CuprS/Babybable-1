@@ -5,12 +5,11 @@ import time
 import uuid
 import pytest
 import requests
+from _support import admin_credentials, admin_session  # noqa: E402
 
 BASE = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "http://localhost:8001").rstrip("/")
 API = f"{BASE}/api"
 
-ADMIN_EMAIL = "copperstone17@gmail.com"
-ADMIN_PW = "REDACTED-PASSWORD"
 PARENT_EMAIL = "prv@test.dev"
 PARENT_PW = "password123"
 SOFIA = "sofia@babybabel.dev"
@@ -68,9 +67,7 @@ class TestTutorSignupPersistence:
         assert r.status_code == 200, r.text
 
     def test_admin_survives_restart(self):
-        r = _login(ADMIN_EMAIL, ADMIN_PW)
-        assert r.status_code == 200, r.text
-        assert r.json()["user"]["is_admin"] is True
+        assert admin_session()["user"]["is_admin"] is True
 
 
 # --------- FEATURE: GET /api/bookings/{id} ACL ---------

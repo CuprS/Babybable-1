@@ -5,6 +5,7 @@ import uuid
 
 import pytest
 import requests
+from _support import admin_session  # noqa: E402
 
 BASE = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or "http://localhost:8001").rstrip("/")
 API = f"{BASE}/api"
@@ -24,7 +25,7 @@ def _login(email, pw):
 @pytest.fixture(scope="module")
 def tokens():
     return {
-        "admin": _login("copperstone17@gmail.com", "REDACTED-PASSWORD"),
+        "admin": {"Authorization": f"Bearer {admin_session()['access_token']}"},
         "sofia": _login("sofia@babybabel.dev", "password123"),
         "marie": _login("marie@babybabel.dev", "password123"),
         "parent": _login("parent@test.dev", "password123"),

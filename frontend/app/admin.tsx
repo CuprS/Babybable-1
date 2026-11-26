@@ -12,6 +12,7 @@ import { AdminBlogPanel } from "@/src/AdminBlogPanel";
 import { AdminBlocksPanel } from "@/src/AdminBlocksPanel";
 import { AdminSafetyPanel } from "@/src/AdminSafetyPanel";
 import { AdminVerificationPanel } from "@/src/AdminVerificationPanel";
+import NotFound from "./+not-found";
 
 interface Stats {
   users: number; parents: number; tutors: number;
@@ -46,7 +47,9 @@ export default function Admin() {
   const [printingId, setPrintingId] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  const isAdmin = !!user?.is_admin;
   const load = useCallback(async () => {
+    if (!isAdmin) return;
     try {
       const [s, e, earn, w9list] = await Promise.all([
         apiFetch<Stats>("/admin/stats"),
@@ -61,17 +64,12 @@ export default function Admin() {
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, [filter]);
+  }, [filter, isAdmin]);
 
   useEffect(() => { load(); }, [load]);
 
-  if (!user?.is_admin) {
-    return (
-      <SafeAreaView style={styles.root} edges={["top", "bottom"]}>
-        <Text style={{ color: theme.color.onSurface, padding: theme.space.xl }}>Admins only.</Text>
-      </SafeAreaView>
-    );
-  }
+  // To everyone except the admin this address looks like any page that doesn't exist.
+  if (!isAdmin) return <NotFound />;
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>

@@ -3,10 +3,10 @@ import os
 import uuid
 import pytest
 import requests
+from _support import admin_session  # noqa: E402
 
 BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("EXPO_BACKEND_URL") or "http://localhost:8001").rstrip("/")
 API = f"{BASE_URL}/api"
-ADMIN = ("copperstone17@gmail.com", "REDACTED-PASSWORD")
 
 
 def _signup(role, label):
@@ -24,9 +24,8 @@ def users():
     pa = _signup("parent", "blkparentA")
     ta = _signup("tutor", "blktutorA")
     tb = _signup("tutor", "blktutorB")
-    r = requests.post(f"{API}/auth/login", json={"email": ADMIN[0], "password": ADMIN[1]})
-    assert r.status_code == 200, r.text
-    adm = {"id": r.json()["user"]["id"], "h": {"Authorization": f"Bearer {r.json()['access_token']}"}}
+    a = admin_session()
+    adm = {"id": a["user"]["id"], "h": {"Authorization": f"Bearer {a['access_token']}"}}
     # tutor A profile so it shows in search
     requests.patch(f"{API}/tutors/me/profile", headers=ta["h"], json={"bio": "TEST_ block tutor", "languages": ["Spanish"], "hourly_rate_cents": 3000})
     ta["tutor_id"] = requests.get(f"{API}/tutors/me/profile", headers=ta["h"]).json()["id"]

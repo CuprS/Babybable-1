@@ -87,7 +87,7 @@ Use your own domain and email. The script:
 At the end it prints your **admin password**: save it in a password manager. Then open
 `https://yourdomain`. The HTTPS certificate is issued in the first minute after DNS points to the server.
 
-## 5. Turn on email (needed for sign-up codes and password resets)
+## 5. Turn on email (needed for sign-up codes, password resets and admin sign-in)
 
 New accounts must confirm their email (`REQUIRE_EMAIL_VERIFICATION=true`), so set this up before
 inviting anyone.
@@ -105,7 +105,24 @@ inviting anyone.
 Any SMTP provider works instead (`EMAIL_PROVIDER=smtp`), but it must use port 587, because Hetzner
 blocks outgoing ports 25 and 465 on new accounts.
 
-To change the admin password, use **Forgot password** on the login screen once email works.
+### The admin account
+
+- **Signing in** takes the password *and* a 6-digit code emailed to `ADMIN_EMAIL`, so set up
+  email first. Admin sessions end after 12 hours (`ADMIN_SESSION_MINUTES`).
+- **Changing the password** is done on the server, not with "Forgot password" (that's switched
+  off for the admin, so someone who gets into the admin mailbox still can't take over):
+
+  ```bash
+  cd /opt/babybabel/deploy && docker compose exec api python admin_tools.py set-password
+  ```
+
+  Do this once after setup, then delete the `ADMIN_INITIAL_PASSWORD` line from `deploy/.env`
+  (it's only used to create the account the first time).
+- `docker compose exec api python admin_tools.py sign-out` signs the admin out everywhere.
+- The admin is hidden from the public: the Admin page looks like a missing page to everyone
+  else, it isn't listed in `robots.txt`, nobody can sign up as admin, and people can't message
+  the admin account unless the admin wrote to them first.
+- Use an admin email address with two-factor sign-in turned on at your email provider.
 
 ## 6. Optional: Hetzner Object Storage
 
@@ -195,4 +212,6 @@ basic_auth {
 - [ ] After deploying, open the site and check the browser console shows no
       "Content Security Policy" errors. When you add Stripe (or any outside script), add its
       domains to the policy in `deploy/Caddyfile` first.
+- [ ] Admin password changed with `admin_tools.py set-password`, and `ADMIN_INITIAL_PASSWORD`
+      removed from `deploy/.env`. Admin sign-in codes arrive by email.
 - [ ] Terms and Privacy Policy reviewed by a lawyer before real families sign up.

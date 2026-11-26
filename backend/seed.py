@@ -83,9 +83,14 @@ async def backfill_slot_keys() -> None:
 
 async def seed_data() -> None:
     admin_pw = os.environ.get("ADMIN_INITIAL_PASSWORD")
-    if not ADMIN_EMAIL or not admin_pw:
-        logger.warning("ADMIN_EMAIL / ADMIN_INITIAL_PASSWORD not set — admin seed skipped")
     admin = await db.users.find_one({"email": ADMIN_EMAIL}) if ADMIN_EMAIL else None
+    if admin_pw and len(admin_pw) < 12:
+        logger.error("ADMIN_INITIAL_PASSWORD is shorter than 12 characters — admin not created")
+        admin_pw = None
+    if not admin and not (ADMIN_EMAIL and admin_pw):
+        logger.warning("ADMIN_EMAIL / ADMIN_INITIAL_PASSWORD not set — admin seed skipped")
+    if admin and admin_pw:
+        logger.warning("The admin account exists: remove ADMIN_INITIAL_PASSWORD from the environment")
     if not admin and ADMIN_EMAIL and admin_pw:
         await db.users.insert_one({
             "id": str(uuid.uuid4()), "email": ADMIN_EMAIL, "password_hash": hash_password(admin_pw),

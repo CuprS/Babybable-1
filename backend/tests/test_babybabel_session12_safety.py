@@ -6,10 +6,10 @@ import uuid
 import random
 import pytest
 import requests
+from _support import admin_session  # noqa: E402
 
 BASE_URL = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("EXPO_BACKEND_URL") or "http://localhost:8001").rstrip("/")
 API = f"{BASE_URL}/api"
-ADMIN = ("copperstone17@gmail.com", "REDACTED-PASSWORD")
 LOG = "/var/log/supervisor/backend.err.log"
 TEST_ALERT = "delivered@resend.dev"
 
@@ -50,13 +50,12 @@ def _email_log_count():
 
 @pytest.fixture(scope="module")
 def admin():
-    r = _login(*ADMIN)
-    assert r.status_code == 200, r.text
-    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    a = admin_session()
+    h = {"Authorization": f"Bearer {a['access_token']}"}
     orig = requests.get(f"{API}/admin/settings/safety-email", headers=h).json().get("email")
     yield {"h": h, "orig": orig}
-    # restore alert email to the owner's address
-    requests.put(f"{API}/admin/settings/safety-email", headers=h, json={"email": "copperstone17@gmail.com"})
+    # put the alert address back the way it was
+    requests.put(f"{API}/admin/settings/safety-email", headers=h, json={"email": orig or ""})
 
 
 CREATED = []

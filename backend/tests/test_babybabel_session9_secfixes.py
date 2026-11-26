@@ -22,6 +22,7 @@ import asyncio
 import importlib
 import pytest
 import requests
+from _support import admin_credentials, admin_session  # noqa: E402
 
 
 BASE_URL = (
@@ -33,8 +34,6 @@ BASE_URL = (
 # Cache-Control header assertions; the origin still enforces the ACL identically.
 ORIGIN_URL = "http://localhost:8001"
 
-ADMIN_EMAIL = "copperstone17@gmail.com"
-ADMIN_PW = os.environ.get("ADMIN_INITIAL_PASSWORD", "REDACTED-PASSWORD")
 PARENT_EMAIL = "parent@test.dev"
 PARENT_PW = "password123"
 TUTOR_EMAIL = "sofia@babybabel.dev"
@@ -428,7 +427,7 @@ class TestAccreditationFilesACL:
 
     def test_admin_can_view_accreditation_file(self, accreditation_setup):
         p = accreditation_setup
-        admin_tok = _token_for(ADMIN_EMAIL, ADMIN_PW)
+        admin_tok = admin_session()["access_token"]
         r = requests.get(
             f"{ORIGIN_URL}/api/files/{p['acc_path']}",
             headers=_hdr(admin_tok),

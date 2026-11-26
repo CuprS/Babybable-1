@@ -37,7 +37,7 @@ DEV_DEFAULTS = {
     "JWT_SECRET": "local-development-only-secret-do-not-use-in-production",
     "SEED_TUTOR_PASSWORD": "password123",
     "ADMIN_EMAIL": "admin@example.com",
-    "ADMIN_INITIAL_PASSWORD": "admin-pass-123",
+    "ADMIN_INITIAL_PASSWORD": "admin-pass-12345",
     "DEV_LOG_EMAIL_CODES": "true",
     "PUSH_ENABLED": "false",
     "STORAGE_BACKEND": "local",

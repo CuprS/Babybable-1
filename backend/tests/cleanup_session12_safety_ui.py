@@ -1,10 +1,10 @@
 # Session 12 UI cleanup: reinstate + delete the TEST_ users created by seed_session12_safety_ui.py (by id/token from seed json files)
 import json, os, sys, random
 import requests
+from _support import admin_session  # noqa: E402
 
 API = (os.environ.get("EXPO_PUBLIC_BACKEND_URL") or os.environ.get("EXPO_BACKEND_URL") or "http://localhost:8001").rstrip("/") + "/api"
-r = requests.post(f"{API}/auth/login", headers={"X-Forwarded-For": "10.6.6.6"}, json={"email": "copperstone17@gmail.com", "password": "REDACTED-PASSWORD"})
-ah = {"Authorization": f"Bearer {r.json()['access_token']}"}
+ah = {"Authorization": f"Bearer {admin_session()['access_token']}"}
 for path in sys.argv[1:]:
     d = json.load(open(path))
     for u in d["blockers"] + [d["P"], d["Q"]]:  # blockers first so their blocks vanish (no tombstones)

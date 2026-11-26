@@ -59,6 +59,9 @@ and purge W-9s past their retention date.
   so injected scripts are blocked. The map uses a copy of Leaflet hosted on the site
   (`public/map.html`, copied in by `yarn install`). Adding a third-party script (e.g. Stripe's
   payment form) means adding its domains to that policy.
+- **The admin account** signs in with its password plus a code emailed to `ADMIN_EMAIL`, has
+  12-hour sessions, can't be reset by email (use `backend/admin_tools.py set-password` on the
+  server) and is hidden from the public (see deploy/README.md).
 - **Deleting an account** removes the person, their messages, photos and push tokens, and cancels
   upcoming sessions. Past bookings and reviews stay, without the name, for the other side's
   history and for accounting. W-9s are kept (still encrypted) for `W9_RETENTION_DAYS` (4 years),
@@ -142,7 +145,8 @@ python run_dev.py
   Delete that file to start fresh.
 - **Uploads:** stored in `backend/data/uploads`.
 - **Email:** nothing is sent; verification and reset codes are printed in the terminal.
-- **Logins:** admin `admin@example.com` (password `admin-pass-123`). The database starts empty.
+- **Logins:** admin `admin@example.com` (password `admin-pass-12345`; the sign-in code is printed
+  in the API log). The database starts empty.
   To try booking quickly, set `SEED_SAMPLE_TUTORS=true` for two verified sample tutors
   (`sofia@babybabel.dev` / `marie@babybabel.dev`, password `password123`); remove it to delete them again.
 

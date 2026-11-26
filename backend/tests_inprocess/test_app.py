@@ -247,7 +247,7 @@ def test_tutor_verification_flow(client, make_user, sofia, db_call):
     stranger = make_user()
     assert client.get(f"/api/files/{id_doc}", headers=stranger["h"]).status_code == 403
     # Admin approves → badge appears and the verified filter finds them.
-    admin_tok = core.make_token("admin-test", "admin")
+    admin_tok = core.make_token("admin-test", "admin", admin=True)
     db_call(core.db.users.insert_one, {"id": "admin-test", "email": "admin@example.com", "name": "Admin", "role": "admin", "is_admin": True, "password_hash": "x"})
     pending = client.get("/api/admin/verifications", headers=H(admin_tok)).json()
     me = next(p for p in pending if p["user_id"] == tutor["user"]["id"])

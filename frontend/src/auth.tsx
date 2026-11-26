@@ -8,7 +8,7 @@ interface AuthState {
   loading: boolean;
   suspended: boolean;
   clearSuspended: () => void;
-  signIn: (email: string, password: string) => Promise<UserPublic>;
+  signIn: (email: string, password: string, code?: string) => Promise<UserPublic>;
   signUp: (email: string, password: string, name: string, role: Role) => Promise<UserPublic>;
   signOut: () => Promise<void>;
   /** Signs out every phone and browser on this account. */
@@ -74,10 +74,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, code?: string) => {
     const data = await apiFetch<{ access_token: string; user: UserPublic }>("/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(code ? { email, password, code } : { email, password }),
     });
     await saveToken(data.access_token);
     setSuspended(false);
