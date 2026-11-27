@@ -47,4 +47,11 @@ export const RESOURCES: Resource[] = [
     url: "https://www.omniglot.com",
     description: "A free guide to the world's languages and writing systems, with useful phrases in each.",
   },
+  {
+    group: "Perfect your speaking.",
+    icon: "mic",
+    title: "HelloTalk",
+    url: "https://www.hellotalk.com/en",
+    description: "Take your pronunciation to the next level in-between lesson by talking with actual speakers.",
+  },
 ];
