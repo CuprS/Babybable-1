@@ -13,7 +13,7 @@ import { Chip, VerifiedBadge } from "@/src/ui";
 import { MenuButton } from "@/src/drawer";
 import { flagFor } from "@/src/flags";
 import { track } from "@/src/analytics";
-import { LiveMap, LiveMapMarker } from "@/src/livemap";
+import { LiveMap, LiveMapMarker, MapRow, mapRowToPin } from "@/src/livemap";
 
 const LANGUAGES = ["All", "Spanish", "French", "Japanese", "Mandarin", "German", "Arabic", "English", "Italian"];
 const DISTANCE_STEPS = [10, 25, 50, 100, 250, 500, 1000];
@@ -86,14 +86,8 @@ export default function Explore() {
       .catch(() => {});
   }, [user]);
   useEffect(() => {
-    apiFetch<{ id: string; latitude: number; longitude: number; name: string; hourly_rate_cents?: number }[]>("/tutors/map")
-      .then((rows) => setMapPins(rows.map((r) => ({
-        id: r.id,
-        latitude: r.latitude,
-        longitude: r.longitude,
-        label: r.name,
-        price: r.hourly_rate_cents ? `$${Math.round(r.hourly_rate_cents / 100)}/hr` : undefined,
-      }))))
+    apiFetch<MapRow[]>("/tutors/map")
+      .then((rows) => setMapPins(rows.map((r) => mapRowToPin(r))))
       .catch(() => {});
   }, []);
 
@@ -230,7 +224,7 @@ export default function Explore() {
                     testID="explore-live-map"
                   />
                   <Text style={{ color: theme.color.muted, fontSize: theme.font.sm, marginTop: 6 }}>
-                    {mapPins.length} tutor{mapPins.length === 1 ? "" : "s"} on the map — pinch to zoom, tap a pin to view.
+                    {mapPins.length} tutor{mapPins.length === 1 ? "" : "s"} on the map — use two fingers or click to move it, tap a pin to see who it is.
                   </Text>
                 </View>
               )}

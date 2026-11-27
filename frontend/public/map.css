@@ -1,13 +1,17 @@
 html, body, #map { margin: 0; padding: 0; height: 100%; width: 100%; }
-body { background: #F2EAE0; }
+body { background: #F2EAE0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+/* Phones: one finger scrolls the page, two fingers move the map. */
+.leaflet-container { touch-action: pan-x pan-y; }
+
+.pin-wrap { background: none; border: 0; }
 .pin {
   position: relative;
+  transform: translate(-50%, calc(-100% - 6px));
   background: #ED6249;
   color: #fff;
   border-radius: 999px;
-  padding: 6px 10px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 12px;
+  padding: 7px 12px;
+  font-size: 14px;
   font-weight: 700;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
   white-space: nowrap;
@@ -17,10 +21,69 @@ body { background: #F2EAE0; }
 .pin::after {
   content: "";
   position: absolute;
-  bottom: -6px;
+  bottom: -7px;
   left: 50%;
-  margin-left: -5px;
-  border-width: 6px 5px 0 5px;
+  margin-left: -6px;
+  border-width: 7px 6px 0 6px;
   border-style: solid;
   border-color: #ED6249 transparent transparent transparent;
 }
+.pin:hover { background: #B83A23; }
+.pin:hover::after { border-top-color: #B83A23; }
+
+.cluster {
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  height: 44px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #2C2421;
+  color: #fff;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 6px rgba(237, 98, 73, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.leaflet-popup-content-wrapper { border-radius: 14px; }
+.leaflet-popup-content { margin: 14px 16px; }
+.card { min-width: 170px; }
+.card-name { font-size: 17px; font-weight: 700; color: #2C2421; }
+.card-meta { font-size: 14px; color: #6b6260; margin-top: 2px; }
+.card-btn {
+  margin-top: 10px;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  background: #ED6249;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.card-btn:hover, .card-btn:focus-visible { background: #B83A23; }
+
+.hint {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  background: rgba(44, 36, 33, 0.55);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 700;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.hint.on { opacity: 1; }

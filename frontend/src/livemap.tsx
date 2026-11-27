@@ -9,6 +9,23 @@ export interface LiveMapMarker {
   longitude: number;
   label: string;
   price?: string;
+  /** Shown on the pin's card, e.g. "Austin, TX". */
+  location?: string;
+}
+
+/** One row of GET /api/tutors/map (verified tutors only, at the city they teach in). */
+export interface MapRow { id: string; latitude: number; longitude: number; name: string; location?: string; hourly_rate_cents?: number }
+
+export function mapRowToPin(r: MapRow, opts: { firstNameOnly?: boolean } = {}): LiveMapMarker {
+  const name = (r.name || "").trim();
+  return {
+    id: r.id,
+    latitude: r.latitude,
+    longitude: r.longitude,
+    label: opts.firstNameOnly ? name.split(" ")[0] : name,
+    location: r.location || undefined,
+    price: r.hourly_rate_cents ? `$${Math.round(r.hourly_rate_cents / 100)}/hr` : undefined,
+  };
 }
 
 interface Props {
