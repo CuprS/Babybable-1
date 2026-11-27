@@ -26,6 +26,7 @@ const MENU = [
   { label: "Support", icon: "life-buoy", route: "/support" },
   { label: "Mission", icon: "heart", route: "/mission" },
   { label: "Blog", icon: "edit-3", route: "/blog" },
+  { label: "Resources", icon: "bookmark", route: "/resources" },
 ] as const;
 
 const TUTOR_MENU = [
