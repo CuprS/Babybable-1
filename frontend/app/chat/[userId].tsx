@@ -18,7 +18,10 @@ interface Invitation {
 interface Msg {
   id: string; from_user_id: string; to_user_id: string; text: string;
   kind: string; invitation?: Invitation | null; created_at: string;
+  /** Contact or payment details shared before a booking (phone, email, address, payment, app, link). */
+  flags?: string[];
 }
+interface ContactWarning { text: string; message: string }
 
 const DURATIONS = [{ label: "60 min", value: 60 }, { label: "90 min", value: 90 }, { label: "2 hrs", value: 120 }, { label: "3 hrs", value: 180 }];
 const TIMES = HOUR_SLOTS;
@@ -46,6 +49,8 @@ export default function Chat() {
   const [otherTutorId, setOtherTutorId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [blocked, setBlocked] = useState(false);
+  const [warning, setWarning] = useState<ContactWarning | null>(null);
+  const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   const load = useCallback(async () => {
@@ -67,18 +72,28 @@ export default function Chat() {
       .catch(() => { setOtherRole("parent"); });
   }, [userId]);
 
-  const send = async () => {
-    const t = text.trim();
-    if (!t || !userId) return;
+  const send = async (confirmShare = false) => {
+    const t = (confirmShare && warning ? warning.text : text).trim();
+    if (!t || !userId || sending) return;
     setText("");
+    setSending(true);
     try {
-      const m = await apiFetch<Msg>("/messages", { method: "POST", body: JSON.stringify({ to_user_id: userId, text: t }) });
+      const m = await apiFetch<Msg>("/messages", { method: "POST", body: JSON.stringify({ to_user_id: userId, text: t, confirm_share: confirmShare }) });
       track("chat_sent", { conversation_id: userId, message_type: "text" });
+      setWarning(null);
       setMsgs((prev) => [...prev, m]);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 50);
     } catch (e: any) {
       setText(t);
-      show({ kind: "error", title: "Message not sent", body: e?.message || "Try again" });
+      if (e?.status === 409 && e?.detail?.code === "contact_warning") {
+        // Contact or payment details before a booking: explain, and let the person decide.
+        track("chat_contact_warning", { kinds: (e.detail.kinds || []).join(",") });
+        setWarning({ text: t, message: e.detail.message });
+      } else {
+        show({ kind: "error", title: "Message not sent", body: e?.message || "Try again" });
+      }
+    } finally {
+      setSending(false);
     }
   };
 
@@ -110,6 +125,8 @@ export default function Chat() {
               onPress={() => router.push(`/tutor/${otherTutorId}`)}
               testID="chat-view-tutor"
               hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="View tutor profile"
             >
               <Feather name="user" size={22} color={theme.color.brand} />
             </Pressable>
@@ -119,7 +136,8 @@ export default function Chat() {
               onPress={() => router.push(`/block/${userId}?name=${encodeURIComponent(name || "")}&from=chat`)}
               testID="chat-block-btn"
               hitSlop={12}
-              accessibilityLabel="Block"
+              accessibilityRole="button"
+              accessibilityLabel="Block or report"
             >
               <Feather name="slash" size={20} color={theme.color.error} />
             </Pressable>
@@ -140,8 +158,11 @@ export default function Chat() {
               return <InvitationCard item={item} mine={mine} onAccept={() => acceptInvite(item)} onDecline={() => declineInvite(item)} amParent={user?.role === "parent"} />;
             }
             return (
-              <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
-                <Text style={{ color: mine ? "#fff" : theme.color.onSurface, fontSize: theme.font.lg }}>{item.text}</Text>
+              <View style={{ gap: 4 }}>
+                <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
+                  <Text style={{ color: mine ? "#fff" : theme.color.onSurface, fontSize: theme.font.lg }}>{item.text}</Text>
+                </View>
+                {item.flags?.length ? <SafetyNote mine={mine} testID={`chat-safety-note-${item.id}`} /> : null}
               </View>
             );
           }}
@@ -171,15 +192,23 @@ export default function Chat() {
                 placeholder="Type a message"
                 placeholderTextColor={theme.color.muted}
                 style={styles.input}
+                accessibilityLabel="Message"
                 multiline
               />
-              <Pressable onPress={send} style={styles.send} testID="chat-send">
+              <Pressable onPress={() => send()} style={styles.send} testID="chat-send" accessibilityRole="button" accessibilityLabel="Send message" disabled={sending}>
                 <Feather name="send" size={18} color="#fff" />
               </Pressable>
             </View>
           </>
         )}
       </KeyboardAvoidingView>
+
+      <ContactWarningSheet
+        warning={warning}
+        sending={sending}
+        onEdit={() => setWarning(null)}
+        onSendAnyway={() => send(true)}
+      />
 
       <InvitationComposer
         open={inviteOpen}
@@ -188,6 +217,45 @@ export default function Chat() {
         toUserId={String(userId)}
       />
     </SafeAreaView>
+  );
+}
+
+/** Shown under a message that shared contact or payment details before the two had a booking. */
+function SafetyNote({ mine, testID }: { mine: boolean; testID?: string }) {
+  return (
+    <View style={[safetyStyles.note, mine ? { alignSelf: "flex-end" } : { alignSelf: "flex-start" }]} testID={testID}>
+      <Feather name="shield" size={14} color={theme.color.brandDark} />
+      <Text style={safetyStyles.noteText}>
+        {mine
+          ? "You shared contact or payment details. Bookings and payments made outside Babybabel aren't protected."
+          : "This message has contact or payment details. Never pay outside Babybabel — we can only protect bookings made here."}
+      </Text>
+    </View>
+  );
+}
+
+function ContactWarningSheet({ warning, sending, onEdit, onSendAnyway }: {
+  warning: ContactWarning | null; sending: boolean; onEdit: () => void; onSendAnyway: () => void;
+}) {
+  return (
+    <Modal visible={!!warning} animationType="fade" transparent onRequestClose={onEdit}>
+      <View style={safetyStyles.backdrop}>
+        <View style={safetyStyles.sheet} testID="chat-contact-warning" accessibilityViewIsModal>
+          <View style={safetyStyles.iconWrap}><Feather name="shield" size={28} color={theme.color.brandDark} /></View>
+          <Text style={safetyStyles.title} accessibilityRole="header">Keep it safe on Babybabel</Text>
+          <Text style={safetyStyles.body}>{warning?.message}</Text>
+          <View style={safetyStyles.tips}>
+            <Text style={safetyStyles.tip}>• Only pay through Babybabel. We can&apos;t refund or protect payments made any other way.</Text>
+            <Text style={safetyStyles.tip}>• Meet only after a booking is confirmed in the app.</Text>
+            <Text style={safetyStyles.tip}>• Our safety team may review messages that share contact details.</Text>
+          </View>
+          <Button title="Edit my message" onPress={onEdit} testID="chat-warning-edit" />
+          <Pressable onPress={onSendAnyway} disabled={sending} style={safetyStyles.sendAnyway} accessibilityRole="button" testID="chat-warning-send">
+            <Text style={safetyStyles.sendAnywayText}>{sending ? "Sending…" : "Send anyway"}</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -352,6 +420,20 @@ function InvitationComposer({ open, onClose, onSent, toUserId }: { open: boolean
   );
 }
 
+const safetyStyles = StyleSheet.create({
+  note: { maxWidth: "85%", flexDirection: "row", alignItems: "flex-start", gap: 6, paddingHorizontal: theme.space.md, paddingVertical: 8, borderRadius: theme.radius.md, backgroundColor: theme.color.brandSoft },
+  noteText: { flex: 1, color: theme.color.brandDark, fontSize: theme.font.base, lineHeight: 20 },
+  backdrop: { flex: 1, backgroundColor: "rgba(44,36,33,0.55)", alignItems: "center", justifyContent: "center", padding: theme.space.xl },
+  sheet: { width: "100%", maxWidth: 460, backgroundColor: theme.color.surface, borderRadius: theme.radius.lg, padding: theme.space.xl, gap: theme.space.md },
+  iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: theme.color.brandSoft, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 22, fontWeight: "700", color: theme.color.onSurface },
+  body: { fontSize: theme.font.lg, lineHeight: 24, color: theme.color.onSurfaceSecondary },
+  tips: { gap: 6, padding: theme.space.md, borderRadius: theme.radius.md, backgroundColor: theme.color.surfaceSecondary },
+  tip: { fontSize: theme.font.base, lineHeight: 21, color: theme.color.onSurfaceSecondary },
+  sendAnyway: { minHeight: 48, alignItems: "center", justifyContent: "center" },
+  sendAnywayText: { color: theme.color.onSurfaceSecondary, fontWeight: "700", fontSize: theme.font.lg, textDecorationLine: "underline" },
+});
+
 const invSlotStyles = StyleSheet.create({
   chip: {
     minWidth: 66, paddingHorizontal: theme.space.md, paddingVertical: 6,
@@ -363,7 +445,7 @@ const invSlotStyles = StyleSheet.create({
   text: { color: theme.color.onSurface, fontWeight: "600", fontSize: theme.font.base },
   textOn: { color: theme.color.onBrand },
   textDisabled: { color: theme.color.muted, textDecorationLine: "line-through" },
-  tag: { color: theme.color.muted, fontSize: 12, marginTop: 1 },
+  tag: { color: theme.color.muted, fontSize: 13, marginTop: 1 },
 });
 
 const styles = StyleSheet.create({
@@ -393,7 +475,7 @@ const cardStyles = StyleSheet.create({
   meta: { color: theme.color.onSurfaceSecondary },
   note: { color: theme.color.onSurface, marginTop: 4, fontStyle: "italic" },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.radius.pill },
-  badgeText: { color: "#fff", fontWeight: "700", fontSize: 12, textTransform: "capitalize" },
+  badgeText: { color: "#fff", fontWeight: "700", fontSize: 13, textTransform: "capitalize" },
   actions: { flexDirection: "row", gap: theme.space.sm, marginTop: theme.space.md },
   action: { flex: 1, height: 44, borderRadius: theme.radius.pill, alignItems: "center", justifyContent: "center" },
   actionGhost: { borderWidth: 1, borderColor: theme.color.borderStrong },

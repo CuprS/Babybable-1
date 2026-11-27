@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, minHeight: 44, borderWidth: 1, borderColor: theme.color.border, borderRadius: theme.radius.md, paddingHorizontal: theme.space.md, color: theme.color.onSurface, backgroundColor: theme.color.surface },
   save: { minHeight: 44, paddingHorizontal: theme.space.lg, borderRadius: theme.radius.pill, backgroundColor: theme.color.brand, alignItems: "center", justifyContent: "center" },
   saveText: { color: theme.color.onBrand, fontWeight: "700" },
-  hint: { color: theme.color.muted, fontSize: 12, marginTop: theme.space.xs },
+  hint: { color: theme.color.muted, fontSize: 13, marginTop: theme.space.xs },
   muted: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm },
   card: { flexDirection: "row", alignItems: "center", gap: theme.space.md, padding: theme.space.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, marginBottom: theme.space.sm },
   name: { fontWeight: "700", color: theme.color.onSurface },

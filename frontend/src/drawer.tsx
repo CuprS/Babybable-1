@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, Animated, Dimensions, ScrollView } from "react-native";
+import { View, Text, StyleSheet, Pressable, Animated, Dimensions, ScrollView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -42,15 +42,29 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const items = user?.role === "tutor" ? [...MENU, ...TUTOR_MENU] : MENU;
 
-  const open = useCallback(() => setOpen(true), []);
+  // The menu's contents only exist while it's open (or sliding), so keyboard and screen-reader
+  // users never land on links hidden off the side of the screen.
+  const [shown, setShown] = useState(false);
+  const closeBtn = useRef<View>(null);
+
+  const open = useCallback(() => { setShown(true); setOpen(true); }, []);
   const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(translate, { toValue: isOpen ? 0 : -DRAWER_W, duration: 220, useNativeDriver: true }),
       Animated.timing(overlay, { toValue: isOpen ? 1 : 0, duration: 220, useNativeDriver: true }),
-    ]).start();
+    ]).start(({ finished }) => { if (finished && !isOpen) setShown(false); });
   }, [isOpen, translate, overlay]);
+
+  // Website: move keyboard focus into the menu when it opens, and let Escape close it.
+  useEffect(() => {
+    if (Platform.OS !== "web" || !isOpen) return;
+    const t = setTimeout(() => (closeBtn.current as unknown as HTMLElement | null)?.focus?.(), 50);
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => { clearTimeout(t); window.removeEventListener("keydown", onKey); };
+  }, [isOpen]);
 
   const go = (route: string) => {
     close();
@@ -69,12 +83,15 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
         style={[styles.drawer, { transform: [{ translateX: translate }] }]}
         pointerEvents={isOpen ? "auto" : "none"}
         testID="side-drawer"
+        accessibilityViewIsModal={isOpen}
+        aria-label="Menu"
       >
+        {shown && (
         <SafeAreaView edges={["top", "bottom"]} style={{ flex: 1 }}>
           <View style={styles.header}>
             <BrandLink tone="brand" size={28} onPress={close} testID="drawer-brand-home" />
-            <Pressable onPress={close} testID="drawer-close" hitSlop={12}>
-              <Feather name="x" size={22} color={theme.color.onSurface} />
+            <Pressable ref={closeBtn} onPress={close} testID="drawer-close" hitSlop={12} accessibilityRole="button" accessibilityLabel="Close menu">
+              <Feather name="x" size={24} color={theme.color.onSurface} />
             </Pressable>
           </View>
           <ScrollView contentContainerStyle={{ paddingVertical: theme.space.md }}>
@@ -84,6 +101,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
                 onPress={() => go(m.route)}
                 style={({ pressed }) => [styles.item, pressed && { backgroundColor: theme.color.surfaceSecondary }]}
                 testID={`drawer-${m.route.slice(1).replace(/\//g, "-")}`}
+                accessibilityRole="link"
               >
                 <Feather name={m.icon as any} size={20} color={theme.color.onSurface} />
                 <Text style={styles.itemText}>{m.label}</Text>
@@ -93,6 +111,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
           </ScrollView>
           <SiteFooter onNavigate={close} />
         </SafeAreaView>
+        )}
       </Animated.View>
     </Ctx.Provider>
   );
@@ -107,8 +126,9 @@ export function useDrawer() {
 export function MenuButton({ tint = "#fff", testID = "menu-button" }: { tint?: string; testID?: string }) {
   const { open } = useDrawer();
   return (
-    <Pressable onPress={open} style={menuStyles.btn} testID={testID} hitSlop={12}>
-      <Feather name="menu" size={22} color={tint} />
+    <Pressable onPress={open} style={menuStyles.btn} testID={testID} hitSlop={12}
+      accessibilityRole="button" accessibilityLabel="Open menu">
+      <Feather name="menu" size={24} color={tint} />
     </Pressable>
   );
 }

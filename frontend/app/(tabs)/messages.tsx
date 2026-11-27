@@ -39,7 +39,7 @@ export default function Messages() {
         <View style={{ flexDirection: "row", alignItems: "center", marginLeft: -theme.space.sm }}>
           <MenuButton tint={theme.color.onSurface} />
         </View>
-        <Text style={styles.title}>Messages</Text>
+        <Text style={styles.title} accessibilityRole="header">Messages</Text>
         <Text style={styles.sub}>Conversations with your matches.</Text>
       </View>
       {loading ? (
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingVertical: theme.space.md },
   rowWrap: { borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: theme.space.sm },
   viewProfileBtn: { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.radius.pill, backgroundColor: theme.color.brandSoft, borderWidth: 1, borderColor: theme.color.brand, marginLeft: 66, marginBottom: theme.space.sm },
-  viewProfileText: { color: theme.color.brandDark, fontWeight: "600", fontSize: 12 },
+  viewProfileText: { color: theme.color.brandDark, fontWeight: "600", fontSize: 13 },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.color.surfaceSecondary },
   avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: theme.color.brand },
   name: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface },

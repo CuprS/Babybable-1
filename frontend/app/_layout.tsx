@@ -13,8 +13,10 @@ import { NotificationsWatcher } from "@/src/notifications";
 import { ReviewPromptProvider } from "@/src/reviewprompt";
 import { SessionReminderProvider } from "@/src/sessionreminder";
 import { listenForNotificationTaps } from "@/src/push";
+import { installWebStyles } from "@/src/webStyles";
 
 SplashScreen.preventAutoHideAsync();
+installWebStyles();
 
 function AuthGate() {
   const { user, loading, suspended } = useAuth();

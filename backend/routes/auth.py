@@ -18,9 +18,10 @@ from core import (
 )
 from email_service import send_email
 from models import (
-    AuthResponse, ForgotPasswordRequest, LoginRequest, PushTokenIn, ResetPasswordRequest,
-    SignupRequest, UserPublic, UserUpdate, VerifyEmailRequest,
+    AuthResponse, ForgotPasswordRequest, LoginRequest, PhoneIn, PhoneVerifyIn, PushTokenIn, ReminderSettings,
+    ReminderSettingsUpdate, ResetPasswordRequest, SignupRequest, UserPublic, UserUpdate, VerifyEmailRequest,
 )
+from sms_service import mask_phone, normalize_phone, send_sms, sms_available
 
 router = APIRouter()
 
@@ -341,6 +342,10 @@ async def delete_account(response: Response, u: dict = Depends(current_user_even
     await db.favorites.delete_many({"user_id": uid})
     await db.push_tokens.delete_many({"user_id": uid})
     await db.auth_codes.delete_many({"user_id": uid})
+    await db.reminder_log.delete_many({"user_id": uid})
+    # Safety-review items about messages this person *received* go; ones about messages they sent
+    # are kept until reviewed and expired (workers.MESSAGE_FLAG_RETENTION_DAYS), as safety records.
+    await db.message_flags.delete_many({"to_user_id": uid})
     await db.posts.delete_many({"author_id": uid})
 
     # 3) Uploaded files: remove from storage (best effort) and drop the records, which makes
@@ -370,3 +375,65 @@ async def delete_account(response: Response, u: dict = Depends(current_user_even
     await db.users.delete_one({"id": uid})
     clear_session_cookie(response)
     return {"deleted": True}
+
+
+# ---- Session reminders: email on/off, and text messages to a confirmed phone number ----
+def _reminder_settings(u: dict) -> ReminderSettings:
+    return ReminderSettings(
+        email=u.get("reminder_email", True), sms=bool(u.get("reminder_sms")) and bool(u.get("phone_verified")),
+        phone=mask_phone(u.get("phone")), phone_verified=bool(u.get("phone_verified")), sms_available=sms_available(),
+    )
+
+
+@router.get("/auth/me/reminders", response_model=ReminderSettings)
+async def get_reminders(u: dict = Depends(current_user)):
+    return _reminder_settings(u)
+
+
+@router.put("/auth/me/reminders", response_model=ReminderSettings)
+async def update_reminders(body: ReminderSettingsUpdate, u: dict = Depends(current_user)):
+    update: dict = {}
+    if body.email is not None:
+        update["reminder_email"] = body.email
+    if body.sms is not None:
+        if body.sms and not (u.get("phone") and u.get("phone_verified")):
+            raise HTTPException(400, "Add and confirm your phone number first.")
+        update["reminder_sms"] = body.sms
+    if update:
+        await db.users.update_one({"id": u["id"]}, {"$set": update})
+    return _reminder_settings({**u, **update})
+
+
+@router.post("/auth/me/phone")
+async def add_phone(body: PhoneIn, request: Request, u: dict = Depends(current_user)):
+    """Text a 6-digit code to the number; it's only used once it's confirmed."""
+    if not sms_available():
+        raise HTTPException(503, "Text message reminders aren't available yet.")
+    if not body.consent:
+        raise HTTPException(400, "Please tick the box to agree to reminder texts.")
+    phone = normalize_phone(body.phone)
+    if not phone:
+        raise HTTPException(422, "That doesn't look like a phone number. Include the country code if you're outside the US or Canada, e.g. +44 7700 900123.")
+    rate_limit("phone-code", 3, 3600, request, key=u["id"], per_ip=False)
+    rate_limit("phone-code-ip", 10, 3600, request)
+    code = await _issue_code(u, "phone")
+    await db.users.update_one({"id": u["id"]}, {"$set": {"phone_pending": phone}})
+    if not await send_sms(phone, f"Your Babybabel code is {code}. It expires in {CODE_TTL_MINUTES} minutes."):
+        raise HTTPException(502, "We couldn't send a text to that number. Check it and try again.")
+    return {"sent": True, "phone": mask_phone(phone)}
+
+
+@router.post("/auth/me/phone/verify", response_model=ReminderSettings)
+async def verify_phone(body: PhoneVerifyIn, u: dict = Depends(current_user)):
+    if not u.get("phone_pending") or not await _check_code(u, "phone", body.code):
+        raise HTTPException(400, "That code isn't right or has expired. Ask for a new one.")
+    update = {"phone": u["phone_pending"], "phone_verified": True, "reminder_sms": True, "sms_consent_at": now_iso()}
+    await db.users.update_one({"id": u["id"]}, {"$set": update, "$unset": {"phone_pending": ""}})
+    return _reminder_settings({**u, **update})
+
+
+@router.delete("/auth/me/phone", response_model=ReminderSettings)
+async def remove_phone(u: dict = Depends(current_user)):
+    fields = {"phone": "", "phone_pending": "", "phone_verified": "", "sms_consent_at": ""}
+    await db.users.update_one({"id": u["id"]}, {"$unset": fields, "$set": {"reminder_sms": False}})
+    return _reminder_settings({**{k: v for k, v in u.items() if k not in fields}, "reminder_sms": False})

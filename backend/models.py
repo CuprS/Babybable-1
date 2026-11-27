@@ -206,6 +206,8 @@ class RespondRequest(BaseModel):
 class MessageCreate(BaseModel):
     to_user_id: str
     text: str = Field(min_length=1, max_length=4000)
+    # Set after the sender has seen the "keep contact on Babybabel" warning and chosen to send anyway.
+    confirm_share: bool = False
 
 
 class Invitation(BaseModel):
@@ -237,6 +239,8 @@ class Message(BaseModel):
     kind: str = "text"
     invitation: Optional[Invitation] = None
     created_at: str
+    # Contact or payment details shared before a paid booking (see contact_guard.py).
+    flags: List[str] = []
 
 
 # ---- Parents ----
@@ -302,3 +306,26 @@ class NotificationOut(BaseModel):
     body: str
     at: str
     read: bool = False
+
+
+# ---- Session reminder settings (the person's own; never shown to anyone else) ----
+class ReminderSettings(BaseModel):
+    email: bool = True
+    sms: bool = False
+    phone: Optional[str] = None  # masked, e.g. "•••• 0199"
+    phone_verified: bool = False
+    sms_available: bool = False
+
+
+class ReminderSettingsUpdate(BaseModel):
+    email: Optional[bool] = None
+    sms: Optional[bool] = None
+
+
+class PhoneIn(BaseModel):
+    phone: str = Field(min_length=7, max_length=32)
+    consent: bool = False  # agreed to get reminder texts
+
+
+class PhoneVerifyIn(BaseModel):
+    code: str = Field(min_length=6, max_length=6)

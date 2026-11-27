@@ -1,9 +1,10 @@
 """Admin dashboards: stats, earnings, analytics events, users."""
-from typing import Optional
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
-from core import db, require_admin
+from core import db, now_iso, require_admin
 
 router = APIRouter()
 
@@ -28,6 +29,7 @@ async def admin_stats(u: dict = Depends(require_admin)):
         "canceled_bookings": await db.bookings.count_documents({"payment_status": "canceled"}),
         "pending_verifications": await db.tutors.count_documents({"verification_status": "pending"}),
         "messages": await db.messages.count_documents({}),
+        "open_message_flags": await db.message_flags.count_documents({"status": "open"}),
         "reviews": await db.reviews.count_documents({}),
         "favorites": await db.favorites.count_documents({}),
         "events": await db.events.count_documents({}),
@@ -55,3 +57,38 @@ async def admin_events(u: dict = Depends(require_admin), limit: int = 100, name:
 @router.get("/admin/users")
 async def admin_users(u: dict = Depends(require_admin), limit: int = 100):
     return await db.users.find({}, {"_id": 0, "password_hash": 0}).sort("created_at", -1).to_list(_cap(limit))
+
+
+# ---- Message safety: messages that shared contact or payment details before a booking ----
+class FlagResolve(BaseModel):
+    outcome: Literal["fine", "reviewed"]
+    note: Optional[str] = Field(default="", max_length=500)
+
+
+@router.get("/admin/message-flags")
+async def admin_message_flags(u: dict = Depends(require_admin), status: Literal["open", "resolved"] = "open", limit: int = 100):
+    flags = await db.message_flags.find({"status": status}, {"_id": 0}).sort("created_at", -1).to_list(_cap(limit))
+    ids = list({f["from_user_id"] for f in flags} | {f["to_user_id"] for f in flags})
+    people = {p["id"]: p for p in await db.users.find(
+        {"id": {"$in": ids}}, {"_id": 0, "id": 1, "name": 1, "role": 1, "suspended": 1}).to_list(len(ids) or 1)}
+    totals: dict = {}
+    for f in flags:
+        sender = f["from_user_id"]
+        if sender not in totals:
+            totals[sender] = await db.message_flags.count_documents({"from_user_id": sender})
+    for f in flags:
+        f["from_user"] = people.get(f["from_user_id"])
+        f["to_user"] = people.get(f["to_user_id"])
+        f["sender_flag_count"] = totals[f["from_user_id"]]
+    return {"flags": flags, "open_count": await db.message_flags.count_documents({"status": "open"})}
+
+
+@router.post("/admin/message-flags/{flag_id}/resolve")
+async def resolve_message_flag(flag_id: str, body: FlagResolve, u: dict = Depends(require_admin)):
+    res = await db.message_flags.update_one({"id": flag_id, "status": "open"}, {"$set": {
+        "status": "resolved", "outcome": body.outcome, "note": body.note or "",
+        "resolved_by": u["id"], "resolved_at": now_iso(),
+    }})
+    if res.matched_count == 0:
+        raise HTTPException(404, "That item was already reviewed.")
+    return {"ok": True}

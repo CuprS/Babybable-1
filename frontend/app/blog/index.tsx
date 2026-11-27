@@ -116,7 +116,7 @@ export default function Blog() {
 const styles = StyleSheet.create({
   headerBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.lg, paddingVertical: theme.space.sm, borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { flex: 1, textAlign: "center", fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface },
-  eyebrow: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 12 },
+  eyebrow: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 13 },
   title: { fontSize: 32, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5, marginTop: theme.space.xs },
   cta: { flexDirection: "row", alignItems: "center", gap: theme.space.md, marginTop: theme.space.xl, padding: theme.space.lg, borderRadius: theme.radius.lg, backgroundColor: theme.color.brandSoft },
   ctaTitle: { color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.lg },
@@ -128,8 +128,8 @@ const styles = StyleSheet.create({
   emptyText: { color: theme.color.onSurfaceSecondary, textAlign: "center" },
   card: { borderRadius: theme.radius.lg, overflow: "hidden", backgroundColor: theme.color.surfaceSecondary },
   img: { width: "100%", aspectRatio: 16 / 9 },
-  tag: { color: theme.color.brand, fontWeight: "700", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
+  tag: { color: theme.color.brand, fontWeight: "700", fontSize: 13, letterSpacing: 1, textTransform: "uppercase" },
   cardTitle: { fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space.xs, lineHeight: 26 },
   excerpt: { color: theme.color.onSurfaceSecondary, marginTop: theme.space.sm, lineHeight: 20 },
-  read: { color: theme.color.muted, marginTop: theme.space.md, fontSize: 12 },
+  read: { color: theme.color.muted, marginTop: theme.space.md, fontSize: 13 },
 });

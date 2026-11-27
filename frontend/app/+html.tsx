@@ -14,7 +14,7 @@ export default function Root({ children }: PropsWithChildren) {
         />
         <title>Babybabel — childcare in every language</title>
         <meta name="description" content="Find caring tutors who look after your children while teaching them a new language. Book sessions near you or online." />
-        <meta name="theme-color" content="#ED6249" />
+        <meta name="theme-color" content="#C8452D" />
         <meta property="og:site_name" content="Babybabel" />
         <meta property="og:title" content="Babybabel — childcare in every language" />
         <meta property="og:description" content="Caring tutors who teach your children a new language while they look after them." />

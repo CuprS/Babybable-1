@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
   pillOn: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
   pillText: { color: theme.color.onSurface, fontWeight: "700" },
   pillTextOn: { color: "#fff" },
-  tinyHint: { color: theme.color.muted, fontSize: 12, marginTop: 2 },
+  tinyHint: { color: theme.color.muted, fontSize: 13, marginTop: 2 },
   checkRow: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, paddingVertical: 6 },
   checkText: { color: theme.color.onSurface, flex: 1, fontSize: theme.font.base },
   secondaryBtn: {

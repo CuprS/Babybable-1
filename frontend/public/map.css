@@ -7,7 +7,7 @@ body { background: #F2EAE0; font-family: -apple-system, BlinkMacSystemFont, "Seg
 .pin {
   position: relative;
   transform: translate(-50%, calc(-100% - 6px));
-  background: #ED6249;
+  background: #C8452D;
   color: #fff;
   border-radius: 999px;
   padding: 7px 12px;
@@ -26,7 +26,7 @@ body { background: #F2EAE0; font-family: -apple-system, BlinkMacSystemFont, "Seg
   margin-left: -6px;
   border-width: 7px 6px 0 6px;
   border-style: solid;
-  border-color: #ED6249 transparent transparent transparent;
+  border-color: #C8452D transparent transparent transparent;
 }
 .pin:hover { background: #B83A23; }
 .pin:hover::after { border-top-color: #B83A23; }
@@ -61,7 +61,7 @@ body { background: #F2EAE0; font-family: -apple-system, BlinkMacSystemFont, "Seg
   min-height: 44px;
   border: 0;
   border-radius: 999px;
-  background: #ED6249;
+  background: #C8452D;
   color: #fff;
   font-size: 15px;
   font-weight: 700;

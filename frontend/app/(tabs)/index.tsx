@@ -118,12 +118,13 @@ export default function Explore() {
       <SafeAreaView edges={["top"]} style={styles.headerWrap}>
         <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.md, paddingTop: theme.space.xs }}>
           <MenuButton tint={theme.color.onSurface} />
-          <Text style={{ flex: 1, textAlign: "center", fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginRight: 40 }}>Explore</Text>
+          <Text style={{ flex: 1, textAlign: "center", fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginRight: 40 }} accessibilityRole="header">Explore</Text>
         </View>
         <View style={styles.searchBar} testID="explore-search-bar">
           <Feather name="search" size={20} color={theme.color.muted} />
           <TextInput
             testID="explore-search-input"
+            accessibilityLabel="Search tutors, languages or cities"
             placeholder="Search tutors, languages, cities"
             placeholderTextColor={theme.color.muted}
             style={styles.searchInput}
@@ -256,13 +257,15 @@ export default function Explore() {
 
 function TutorCard({ tutor, onPress, isFav, canFav, onFav }: { tutor: Tutor; onPress: () => void; isFav?: boolean; canFav?: boolean; onFav?: () => void }) {
   return (
-    <Pressable onPress={onPress} testID={`tutor-card-${tutor.id}`} style={cardStyles.card}>
+    <Pressable onPress={onPress} testID={`tutor-card-${tutor.id}`} style={cardStyles.card} accessibilityRole="button">
       <View style={cardStyles.imageWrap}>
         <Image
           source={{ uri: fileUrl(tutor.hero_image_url || tutor.avatar_url) }}
           style={cardStyles.image}
           contentFit="cover"
           transition={200}
+          accessible={false}
+          alt=""
         />
         <LinearGradient
           colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.15)"]}
@@ -335,7 +338,7 @@ function TutorHome() {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.color.surface }} edges={["top"]}>
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.md, paddingTop: theme.space.xs }}>
         <MenuButton tint={theme.color.onSurface} />
-        <Text style={{ flex: 1, textAlign: "center", fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginRight: 40 }}>Dashboard</Text>
+        <Text style={{ flex: 1, textAlign: "center", fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginRight: 40 }} accessibilityRole="header">Dashboard</Text>
       </View>
       <ScrollView contentContainerStyle={{ padding: theme.space.xl, paddingBottom: theme.space["3xl"] }}>
         <Text style={{ fontSize: 28, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5 }}>Welcome, {firstName || "tutor"}</Text>
@@ -438,9 +441,9 @@ const styles = StyleSheet.create({
   },
   distanceLabel: { color: theme.color.onSurface, fontWeight: "600", fontSize: theme.font.sm },
   remoteLabel: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, marginRight: 4 },
-  distanceEdge: { color: theme.color.muted, fontSize: 12, minWidth: 34, textAlign: "center" },
+  distanceEdge: { color: theme.color.muted, fontSize: 13, minWidth: 34, textAlign: "center" },
   distanceCta: { color: theme.color.brand, fontWeight: "700" },
-  distanceCaption: { color: theme.color.muted, fontSize: 12, textAlign: "right" },
+  distanceCaption: { color: theme.color.muted, fontSize: 13, textAlign: "right" },
 });
 
 const cardStyles = StyleSheet.create({
@@ -458,7 +461,7 @@ const cardStyles = StyleSheet.create({
     backgroundColor: theme.color.brand, paddingHorizontal: theme.space.md, paddingVertical: 6,
     borderRadius: theme.radius.pill,
   },
-  newBadgeText: { color: "#fff", fontWeight: "700", fontSize: 12, letterSpacing: 0.5, textTransform: "uppercase" },
+  newBadgeText: { color: "#fff", fontWeight: "700", fontSize: 13, letterSpacing: 0.5, textTransform: "uppercase" },
   favBtn: {
     position: "absolute", bottom: theme.space.md, right: theme.space.md,
     width: 36, height: 36, borderRadius: 18, backgroundColor: "rgba(0,0,0,0.35)",

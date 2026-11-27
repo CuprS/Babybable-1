@@ -5,10 +5,11 @@ from datetime import timedelta
 from typing import List, Optional
 
 import stripe
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pymongo.errors import DuplicateKeyError
 
 from booking_service import attach_payment_intent, cancel_booking, refund_policy
+from calendar_feed import event_details, google_calendar_url, ics_for
 from core import (
     CANCEL_FULL_REFUND_HOURS, NOT_VERIFIED_MSG, RESCHEDULE_MIN_HOURS, TUTOR_RESPONSE_HOURS, _normalize_slot,
     blocked_between, is_tutor_verified,
@@ -181,6 +182,28 @@ async def my_bookings(u: dict = Depends(current_user)):
 async def get_booking(booking_id: str, u: dict = Depends(current_user)):
     b, side = await _load_for(booking_id, u)
     return booking_view(b, side)
+
+
+@router.get("/bookings/{booking_id}/calendar")
+async def booking_calendar(booking_id: str, u: dict = Depends(current_user)):
+    """What the app needs for its 'Add to my calendar' button."""
+    b, side = await _load_for(booking_id, u)
+    ev = event_details(b, side)
+    if not ev:
+        raise HTTPException(400, "This booking has no start time.")
+    return {"title": ev["title"], "start_utc": ev["start"].isoformat(), "end_utc": ev["end"].isoformat(),
+            "google_url": google_calendar_url(ev), "ics_path": f"/api/bookings/{booking_id}/calendar.ics"}
+
+
+@router.get("/bookings/{booking_id}/calendar.ics")
+async def booking_calendar_file(booking_id: str, u: dict = Depends(current_user)):
+    b, side = await _load_for(booking_id, u)
+    ev = event_details(b, side)
+    if not ev:
+        raise HTTPException(400, "This booking has no start time.")
+    return Response(ics_for(b, ev), media_type="text/calendar; charset=utf-8", headers={
+        "Content-Disposition": 'attachment; filename="babybabel-session.ics"', "Cache-Control": "no-store",
+    })
 
 
 @router.get("/bookings/{booking_id}/cancel-preview")

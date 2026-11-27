@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Platform, TextInput } from "react-native";
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Alert, Platform, TextInput, Linking } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { apiFetch, Booking, bookingStatus, deviceTimeZone, money, zoneLabel } from "@/src/api";
+import { apiFetch, apiUrl, Booking, bookingStatus, deviceTimeZone, money, zoneLabel } from "@/src/api";
 import { theme } from "@/src/theme";
 import { Button } from "@/src/ui";
 import { useAuth } from "@/src/auth";
@@ -19,6 +19,21 @@ function confirmAction(title: string, message: string, confirmLabel: string): Pr
       { text: confirmLabel, style: "destructive", onPress: () => resolve(true) },
     ]);
   });
+}
+
+/** When a session ends, as a timestamp. Its date and time are wall-clock times in `tz`. */
+function sessionEndMs(date: string, time: string, minutes: number, tz?: string | null): number {
+  const [y, mo, d] = date.split("-").map(Number);
+  const [h, mi] = time.split(":").map(Number);
+  const guess = Date.UTC(y, mo - 1, d, h, mi);
+  let offset = 0;
+  try {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+      timeZone: tz || "UTC", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+    }).formatToParts(new Date(guess)).map((p) => [p.type, p.value]));
+    offset = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute) - guess;
+  } catch {}
+  return guess - offset + minutes * 60000;
 }
 
 export default function BookingDetail() {
@@ -61,7 +76,9 @@ export default function BookingDetail() {
   const looksPast = start.getTime() + b.duration_minutes * 60000 < Date.now() - 24 * 3600 * 1000;
   const other = isParent ? b.tutor_name : b.parent_name;
   const canPay = isParent && b.payment_status === "pending";
-  const canReview = isParent && paid && !hasReviewed && b.tutor_response !== "pending";
+  // Reviews open once the session has ended (the server refuses them before then).
+  const ended = sessionEndMs(b.date, b.time, b.duration_minutes, b.timezone) < Date.now();
+  const canReview = isParent && paid && ended && !hasReviewed && b.tutor_response !== "pending";
   const awaitingMe = isTutor && paid && b.tutor_response === "pending";
   const canChange = !canceled && b.payment_status !== "failed" && !looksPast;
   const deviceTz = deviceTimeZone();
@@ -172,6 +189,10 @@ export default function BookingDetail() {
           <Text style={styles.total}>{money(isTutor ? b.amount_cents - (b.platform_fee_cents || 0) : b.amount_cents)}</Text>
         </View>
 
+        {paid && !canceled && b.tutor_response !== "declined" && !looksPast && (
+          <AddToCalendar bookingId={b.id} />
+        )}
+
         {canReview && (
           <Pressable testID="booking-rate-btn" onPress={() => openReview({ bookingId: b.id, tutorId: b.tutor_id, tutorName: b.tutor_name })} style={styles.rateCta} accessibilityRole="button">
             <Feather name="star" size={20} color="#fff" />
@@ -209,6 +230,57 @@ export default function BookingDetail() {
         </View>
       )}
     </SafeAreaView>
+  );
+}
+
+/** Google Calendar link, plus an .ics file for Apple Calendar, Outlook and the rest (website only:
+ * the download uses the sign-in cookie, which the phone apps don't have). */
+function AddToCalendar({ bookingId }: { bookingId: string }) {
+  const { show } = useToast();
+  const [open, setOpen] = useState(false);
+
+  const google = async () => {
+    try {
+      const r = await apiFetch<{ google_url: string }>(`/bookings/${bookingId}/calendar`);
+      if (Platform.OS === "web") window.open(r.google_url, "_blank", "noopener,noreferrer");
+      else await Linking.openURL(r.google_url);
+    } catch (e: any) { show({ kind: "error", title: "Couldn't open Google Calendar", body: e?.message }); }
+  };
+
+  const download = () => {
+    const a = document.createElement("a");
+    a.href = apiUrl(`/bookings/${bookingId}/calendar.ics`);
+    a.download = "babybabel-session.ics";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    show({ kind: "success", title: "Calendar file downloaded", body: "Open it to add the session to your calendar." });
+  };
+
+  return (
+    <View style={styles.calCard} testID="booking-calendar">
+      <Pressable onPress={() => setOpen(!open)} style={styles.calHead} accessibilityRole="button"
+        accessibilityState={{ expanded: open }} testID="booking-add-calendar">
+        <Feather name="calendar" size={22} color={theme.color.brandDark} />
+        <Text style={styles.calTitle}>Add to my calendar</Text>
+        <Feather name={open ? "chevron-up" : "chevron-down"} size={20} color={theme.color.brandDark} />
+      </Pressable>
+      {open && (
+        <View style={{ gap: theme.space.sm }}>
+          <Pressable onPress={google} style={styles.calOption} accessibilityRole="button" testID="booking-calendar-google">
+            <Text style={styles.calOptionText}>Google Calendar</Text>
+            <Feather name="external-link" size={18} color={theme.color.onSurface} />
+          </Pressable>
+          {Platform.OS === "web" && (
+            <Pressable onPress={download} style={styles.calOption} accessibilityRole="button" testID="booking-calendar-ics">
+              <Text style={styles.calOptionText}>Apple, Outlook or another calendar</Text>
+              <Feather name="download" size={18} color={theme.color.onSurface} />
+            </Pressable>
+          )}
+          <Text style={styles.policy}>Includes a reminder an hour before. If the session moves, add it again.</Text>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -256,4 +328,9 @@ const styles = StyleSheet.create({
   cancelBtn: { minHeight: 48, alignItems: "center", justifyContent: "center", borderRadius: theme.radius.pill, borderWidth: 1, borderColor: theme.color.error },
   cancelText: { color: theme.color.error, fontWeight: "700", fontSize: theme.font.lg },
   policy: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, textAlign: "center", lineHeight: 18 },
+  calCard: { marginTop: theme.space.xl, padding: theme.space.lg, borderRadius: theme.radius.lg, backgroundColor: theme.color.brandSoft, gap: theme.space.md },
+  calHead: { flexDirection: "row", alignItems: "center", gap: theme.space.md, minHeight: 44 },
+  calTitle: { flex: 1, fontSize: theme.font.lg, fontWeight: "700", color: theme.color.brandDark },
+  calOption: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: theme.space.md, minHeight: 52, paddingHorizontal: theme.space.lg, borderRadius: theme.radius.md, backgroundColor: theme.color.surface, borderWidth: 1, borderColor: theme.color.border },
+  calOptionText: { flex: 1, fontSize: theme.font.lg, fontWeight: "600", color: theme.color.onSurface },
 });

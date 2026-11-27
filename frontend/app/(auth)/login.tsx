@@ -43,7 +43,7 @@ export default function Login() {
           </Pressable>
         </View>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>Welcome back</Text>
+          <Text style={styles.title} accessibilityRole="header">Welcome back</Text>
           <Text style={styles.subtitle}>Log in to continue with Babybabel.</Text>
           <View style={{ gap: theme.space.lg, marginTop: theme.space.xl }}>
             <Input testID="login-email-input" label="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} placeholder="you@example.com" />

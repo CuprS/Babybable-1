@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   hero: { width: "100%", aspectRatio: 4 / 3 },
   statusPill: { alignSelf: "flex-start", backgroundColor: theme.color.brandSoft, paddingHorizontal: theme.space.md, paddingVertical: 4, borderRadius: theme.radius.pill, marginBottom: theme.space.md },
   statusText: { color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.sm },
-  tag: { color: theme.color.brand, fontWeight: "700", fontSize: 12, letterSpacing: 1, textTransform: "uppercase" },
+  tag: { color: theme.color.brand, fontWeight: "700", fontSize: 13, letterSpacing: 1, textTransform: "uppercase" },
   title: { fontSize: 28, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5, marginTop: theme.space.xs, lineHeight: 34 },
   byline: { flexDirection: "row", alignItems: "center", gap: theme.space.sm, marginTop: theme.space.lg, marginBottom: theme.space.xl },
   avatar: { width: 32, height: 32, borderRadius: 16 },

@@ -38,7 +38,7 @@ export default function Onboarding() {
             <MenuButton />
           </View>
           <View style={styles.bottom}>
-            <Text style={styles.title}>Care, in{"\n"}every language.</Text>
+            <Text style={styles.title} accessibilityRole="header">Care, in{"\n"}every language.</Text>
             <Text style={styles.subtitle}>
               Trusted tutors who watch, play, and teach a new language — one warm session at a time.
             </Text>

@@ -345,9 +345,9 @@ const styles = StyleSheet.create({
   section: { fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space.xl, marginBottom: theme.space.md },
   dateCell: { width: 68, height: 88, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.color.border, alignItems: "center", justifyContent: "center", backgroundColor: theme.color.surface },
   dateCellSelected: { backgroundColor: theme.color.brand, borderColor: theme.color.brand },
-  dateWeek: { color: theme.color.onSurfaceSecondary, fontSize: 12, fontWeight: "600" },
+  dateWeek: { color: theme.color.onSurfaceSecondary, fontSize: 13, fontWeight: "600" },
   dateDay: { color: theme.color.onSurface, fontSize: 22, fontWeight: "700", marginTop: 2 },
-  dateMonth: { color: theme.color.onSurfaceSecondary, fontSize: 12 },
+  dateMonth: { color: theme.color.onSurfaceSecondary, fontSize: 13 },
   notes: { minHeight: 80, borderWidth: 1, borderColor: theme.color.border, borderRadius: theme.radius.md, padding: theme.space.md, textAlignVertical: "top", color: theme.color.onSurface },
   housingBlock: {
     marginTop: theme.space.md,
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   housingLabel: { color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.lg, flex: 1 },
-  housingOpt: { color: theme.color.brandDark, opacity: 0.75, fontSize: 12, textTransform: "uppercase", letterSpacing: 0.5 },
+  housingOpt: { color: theme.color.brandDark, opacity: 0.75, fontSize: 13, textTransform: "uppercase", letterSpacing: 0.5 },
   housingHint: { color: theme.color.brandDark, opacity: 0.85, fontSize: theme.font.sm, marginBottom: 6 },
   housingInput: {
     minHeight: 96,
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     backgroundColor: theme.color.surface,
   },
-  housingCount: { color: theme.color.brandDark, opacity: 0.65, fontSize: 12, textAlign: "right" },
+  housingCount: { color: theme.color.brandDark, opacity: 0.65, fontSize: 13, textAlign: "right" },
   summary: { marginTop: theme.space.xl, backgroundColor: theme.color.surfaceSecondary, padding: theme.space.lg, borderRadius: theme.radius.lg, gap: theme.space.sm },
   summaryTitle: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface, marginBottom: theme.space.xs },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.lg, backgroundColor: theme.color.surface, borderTopWidth: 1, borderTopColor: theme.color.border },
@@ -398,5 +398,5 @@ const slotChipStyles = StyleSheet.create({
   text: { color: theme.color.onSurface, fontWeight: "600", fontSize: theme.font.base },
   textOn: { color: theme.color.onBrand },
   textDisabled: { color: theme.color.muted, textDecorationLine: "line-through" },
-  tag: { color: theme.color.muted, fontSize: 12, marginTop: 1 },
+  tag: { color: theme.color.muted, fontSize: 13, marginTop: 1 },
 });

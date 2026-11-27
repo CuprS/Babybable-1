@@ -36,17 +36,17 @@ export function LandingPage({ title, eyebrow, heroImage, intro, sections = [], c
       <ScrollView contentContainerStyle={{ paddingBottom: theme.space["3xl"] }}>
         {heroImage && (
           <View style={styles.heroWrap}>
-            <Image source={{ uri: heroImage }} style={styles.hero} contentFit="cover" />
+            <Image source={{ uri: heroImage }} style={styles.hero} contentFit="cover" accessible={false} alt="" />
             <LinearGradient colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.55)"]} style={StyleSheet.absoluteFill} />
             <View style={styles.heroOverlay}>
               {eyebrow ? <Text style={styles.eyebrow}>{eyebrow}</Text> : null}
-              <Text style={styles.heroTitle}>{title}</Text>
+              <Text style={styles.heroTitle} accessibilityRole="header">{title}</Text>
             </View>
           </View>
         )}
         <View style={{ padding: theme.space.xl, gap: theme.space.lg }}>
           {!heroImage && eyebrow ? <Text style={styles.eyebrowDark}>{eyebrow}</Text> : null}
-          {!heroImage ? <Text style={styles.title}>{title}</Text> : null}
+          {!heroImage ? <Text style={styles.title} accessibilityRole="header">{title}</Text> : null}
           <Text style={styles.intro}>{intro}</Text>
           {sections.map((s, i) => (
             <View key={i} style={styles.section}>
@@ -78,8 +78,8 @@ const styles = StyleSheet.create({
   heroWrap: { width: "100%", aspectRatio: 16 / 10, backgroundColor: theme.color.surfaceSecondary },
   hero: { width: "100%", height: "100%" },
   heroOverlay: { position: "absolute", bottom: 0, left: 0, right: 0, padding: theme.space.xl },
-  eyebrow: { color: "rgba(255,255,255,0.85)", fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 12 },
-  eyebrowDark: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 12 },
+  eyebrow: { color: "rgba(255,255,255,0.85)", fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 13 },
+  eyebrowDark: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 13 },
   heroTitle: { color: "#fff", fontSize: 32, fontWeight: "700", letterSpacing: -0.5, marginTop: theme.space.xs },
   title: { fontSize: 32, fontWeight: "700", color: theme.color.onSurface, letterSpacing: -0.5 },
   intro: { fontSize: theme.font.lg, color: theme.color.onSurfaceSecondary, lineHeight: 24 },

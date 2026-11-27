@@ -6,9 +6,10 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 
 from booking_service import attach_payment_intent
+from contact_guard import describe, detect_contact_info
 from core import (
     BLOCKED_MSG, NOT_VERIFIED_MSG, TUTOR_NOT_VERIFIED_MSG, _normalize_slot, blocked_between, blocked_user_ids,
-    current_user, db, is_tutor_verified,
+    current_user, db, is_tutor_verified, notify_admins,
     find_overlapping_booking, is_slot_allowed, now_iso, now_utc, platform_fee_for, push_notification,
     reject_past_slot, require_verified_email,
 )
@@ -32,6 +33,49 @@ async def users_have_relationship(tutor_user_id: str, parent_user_id: str, paren
     if not parent_must_reach_out:
         q.append({"from_user_id": tutor_user_id, "to_user_id": parent_user_id})
     return bool(await db.messages.find_one({"$or": q}, {"_id": 1}))
+
+
+async def have_paid_booking(a: str, b: str) -> bool:
+    """True if these two people have a paid (not cancelled) booking together, either way round."""
+    for tutor_uid, parent_uid in ((a, b), (b, a)):
+        tutor = await db.tutors.find_one({"user_id": tutor_uid}, {"_id": 0, "id": 1})
+        if tutor and await db.bookings.find_one(
+            {"tutor_id": tutor["id"], "parent_id": parent_uid, "payment_status": "paid"}, {"_id": 1},
+        ):
+            return True
+    return False
+
+
+async def contact_flags(sender: dict, to_user: dict, text: str) -> list[str]:
+    """Off-platform details in a message sent before the pair has a paid booking. Messages to or
+    from the admin account aren't checked."""
+    if sender.get("is_admin") or to_user.get("is_admin"):
+        return []
+    kinds = detect_contact_info(text)
+    if kinds and await have_paid_booking(sender["id"], to_user["id"]):
+        return []
+    return kinds
+
+
+async def record_flag(message: dict, sender: dict, kinds: list[str], warned: bool) -> None:
+    """Queue a flagged message for the admin team (Admin → Message safety)."""
+    first_open = not await db.message_flags.find_one({"from_user_id": sender["id"], "status": "open"}, {"_id": 1})
+    await db.message_flags.insert_one({
+        "id": str(uuid.uuid4()), "message_id": message["id"], "from_user_id": sender["id"],
+        "to_user_id": message["to_user_id"], "kinds": kinds, "text": message["text"][:4000],
+        "warned": warned, "status": "open", "created_at": now_iso(),
+    })
+    if first_open:  # one alert per person until the team has looked
+        await notify_admins("message_flag", "A message needs review",
+                            f"{sender.get('name', 'Someone')} shared {describe(kinds)} before booking.")
+
+
+def contact_warning(kinds: list[str]) -> HTTPException:
+    return HTTPException(409, {
+        "code": "contact_warning", "kinds": kinds,
+        "message": (f"Your message includes {describe(kinds)}. Until you have a booking together, we recommend "
+                    "keeping messages and payments on Babybabel, where we can help keep everyone safe."),
+    })
 
 
 async def enforce_message_limits(u: dict, to_user: dict) -> bool:
@@ -67,11 +111,16 @@ async def send_message(body: MessageCreate, u: dict = Depends(current_user)):
         # The admin account can't be contacted directly; people can reply once the admin writes.
         raise HTTPException(404, "Recipient not found")
     cold = await enforce_message_limits(u, to_user)
+    flags = await contact_flags(u, to_user, body.text)
+    if flags and not body.confirm_share:
+        raise contact_warning(flags)
     m = {
         "id": str(uuid.uuid4()), "from_user_id": u["id"], "to_user_id": body.to_user_id,
-        "text": body.text, "kind": "text", "invitation": None, "created_at": now_iso(),
+        "text": body.text, "kind": "text", "invitation": None, "created_at": now_iso(), "flags": flags,
     }
     await db.messages.insert_one({**m, "cold": cold})
+    if flags:
+        await record_flag(m, u, flags, warned=True)
     await push_notification(body.to_user_id, "chat", f"New message from {u['name']}", body.text[:120], {"from_user_id": u["id"]})
     return Message(**m)
 
@@ -101,12 +150,16 @@ async def send_invitation(body: InvitationCreate, u: dict = Depends(current_user
         "duration_minutes": body.duration_minutes, "language": body.language,
         "note": body.note or "", "status": "pending", "booking_id": None,
     }
+    # The note isn't blocked (the tutor already chose a time and price), but it's labelled and reviewed.
+    flags = await contact_flags(u, to_user, body.note or "")
     m = {
         "id": str(uuid.uuid4()), "from_user_id": u["id"], "to_user_id": body.to_user_id,
         "text": f"Lesson invitation · {body.language} · {body.date} {slot_time}",
-        "kind": "invitation", "invitation": inv, "created_at": now_iso(),
+        "kind": "invitation", "invitation": inv, "created_at": now_iso(), "flags": flags,
     }
     await db.messages.insert_one({**m, "cold": cold})
+    if flags:
+        await record_flag({**m, "text": body.note or ""}, u, flags, warned=False)
     await push_notification(body.to_user_id, "invitation", f"Lesson invitation from {u['name']}",
                             f"{body.language} · {body.date} at {slot_time} · ${body.price_cents / 100:.0f}", {"from_user_id": u["id"]})
     return Message(**m)

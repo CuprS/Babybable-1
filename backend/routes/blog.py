@@ -61,7 +61,6 @@ class PostReview(BaseModel):
     reviewer_notes: Optional[str] = Field(default="", max_length=600)
 
 
-
 # ---- Blog posts ----
 def post_doc_to_model(d: dict) -> Post:
     data = {k: d.get(k) for k in Post.model_fields.keys()}

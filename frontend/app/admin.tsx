@@ -11,6 +11,7 @@ import { Button } from "@/src/ui";
 import { AdminBlogPanel } from "@/src/AdminBlogPanel";
 import { AdminBlocksPanel } from "@/src/AdminBlocksPanel";
 import { AdminSafetyPanel } from "@/src/AdminSafetyPanel";
+import { AdminMessageSafetyPanel } from "@/src/AdminMessageSafetyPanel";
 import { AdminVerificationPanel } from "@/src/AdminVerificationPanel";
 import NotFound from "./+not-found";
 
@@ -131,6 +132,7 @@ export default function Admin() {
 
           <AdminVerificationPanel reloadKey={reloadKey} />
           <AdminBlogPanel reloadKey={reloadKey} />
+          <AdminMessageSafetyPanel reloadKey={reloadKey} />
           <AdminSafetyPanel reloadKey={reloadKey} />
           <AdminBlocksPanel reloadKey={reloadKey} />
 
@@ -244,7 +246,7 @@ const styles = StyleSheet.create({
   eventRow: { padding: theme.space.md, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, marginBottom: theme.space.sm },
   eventName: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.brand },
   eventMeta: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, marginTop: 4 },
-  eventProps: { color: theme.color.muted, fontSize: 12, marginTop: 4, fontFamily: "monospace" },
+  eventProps: { color: theme.color.muted, fontSize: 13, marginTop: 4, fontFamily: "monospace" },
   muted: { color: theme.color.onSurfaceSecondary },
   earnHero: {
     marginTop: theme.space.xl,

@@ -34,7 +34,8 @@ export async function apiFetch<T = any>(
   if (!res.ok) {
     const msg = errorMessage(data, res.status);
     if (res.status === 423) suspendedHandler?.(msg);
-    throw Object.assign(new Error(msg), { status: res.status });
+    const detail = data && typeof data === "object" && "detail" in data ? (data as any).detail : undefined;
+    throw Object.assign(new Error(msg), { status: res.status, detail });
   }
   return data as T;
 }
@@ -45,6 +46,7 @@ const FIELD_NAMES: Record<string, string> = { email: "Email", password: "Passwor
 function errorMessage(data: unknown, status: number): string {
   const detail = data && typeof data === "object" && "detail" in data ? (data as any).detail : null;
   if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && typeof detail.message === "string") return detail.message;
   if (Array.isArray(detail) && detail.length) {
     const first = detail[0] || {};
     const field = Array.isArray(first.loc) ? String(first.loc[first.loc.length - 1]) : "";
@@ -65,6 +67,11 @@ export async function apiUpload(uri: string, name = "photo.jpg", type = "image/j
   const res = await uploadForm(`${BASE}/api/uploads`, uri, name, type, await authHeaders());
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   return res.json();
+}
+
+/** Full address of an API path, e.g. for a download link. */
+export function apiUrl(path: string): string {
+  return `${BASE}/api${path}`;
 }
 
 export function fileUrl(pathOrUrl?: string | null): string | undefined {

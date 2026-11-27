@@ -85,7 +85,7 @@ ${message}`)) await go(); return; }
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: theme.space.md, paddingTop: theme.space.xs }}>
         <MenuButton tint={theme.color.onSurface} />
-        <Text style={{ flex: 1, textAlign: "center", fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginRight: 40 }}>Profile</Text>
+        <Text style={{ flex: 1, textAlign: "center", fontSize: theme.font.xl, fontWeight: "700", color: theme.color.onSurface, marginRight: 40 }} accessibilityRole="header">Profile</Text>
       </View>
       <ScrollView contentContainerStyle={{ padding: theme.space.xl, paddingBottom: theme.space["3xl"] }}>
         <View style={styles.headerCard}>
@@ -173,9 +173,14 @@ ${message}`)) await go(); return; }
           <Text style={styles.rowText}>My bookings</Text>
           <Feather name="chevron-right" size={20} color={theme.color.muted} />
         </Pressable>
-        <Pressable testID="profile-messages-btn" onPress={() => router.push("/(tabs)/messages")} style={styles.row}>
+        <Pressable testID="profile-messages-btn" onPress={() => router.push("/(tabs)/messages")} style={styles.row} accessibilityRole="button">
           <Feather name="message-circle" size={20} color={theme.color.onSurface} />
           <Text style={styles.rowText}>Messages</Text>
+          <Feather name="chevron-right" size={20} color={theme.color.muted} />
+        </Pressable>
+        <Pressable testID="profile-reminders-btn" onPress={() => router.push("/reminders")} style={styles.row} accessibilityRole="button">
+          <Feather name="bell" size={20} color={theme.color.onSurface} />
+          <Text style={styles.rowText}>Session reminders</Text>
           <Feather name="chevron-right" size={20} color={theme.color.muted} />
         </Pressable>
 
@@ -203,7 +208,7 @@ const styles = StyleSheet.create({
   avatar: { width: 96, height: 96, borderRadius: 48, backgroundColor: theme.color.brand },
   avatarFallback: { alignItems: "center", justifyContent: "center" },
   camBadge: { position: "absolute", bottom: 0, right: 0, width: 30, height: 30, borderRadius: 15, backgroundColor: theme.color.brand, alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: theme.color.surfaceSecondary },
-  hint: { color: theme.color.muted, fontSize: 12, marginTop: theme.space.sm },
+  hint: { color: theme.color.muted, fontSize: 13, marginTop: theme.space.sm },
   name: { fontSize: 22, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space.md },
   role: { color: theme.color.onSurfaceSecondary, marginTop: 4 },
   row: { flexDirection: "row", alignItems: "center", gap: theme.space.md, paddingVertical: theme.space.lg, borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth },

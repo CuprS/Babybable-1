@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: theme.space.xl, paddingVertical: theme.space.md, borderBottomColor: theme.color.border, borderBottomWidth: StyleSheet.hairlineWidth },
   headerTitle: { fontSize: theme.font.lg, fontWeight: "700", color: theme.color.onSurface },
   receipt: { padding: theme.space.xl, backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.lg },
-  eyebrow: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 12 },
+  eyebrow: { color: theme.color.brand, fontWeight: "700", letterSpacing: 1, textTransform: "uppercase", fontSize: 13 },
   title: { fontSize: 26, fontWeight: "700", color: theme.color.onSurface, marginTop: theme.space.xs, letterSpacing: -0.5 },
   sub: { color: theme.color.onSurfaceSecondary, marginTop: 4 },
   divider: { height: 1, backgroundColor: theme.color.border, marginVertical: theme.space.lg },
@@ -124,6 +124,6 @@ const styles = StyleSheet.create({
   stripeIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.color.brand, alignItems: "center", justifyContent: "center" },
   methodTitle: { color: theme.color.onSurface, fontWeight: "700", fontSize: theme.font.lg },
   methodSub: { color: theme.color.onSurfaceSecondary, fontSize: theme.font.sm, marginTop: 2 },
-  smallprint: { color: theme.color.muted, fontSize: 12, marginTop: theme.space.xl, lineHeight: 18 },
+  smallprint: { color: theme.color.muted, fontSize: 13, marginTop: theme.space.xl, lineHeight: 18 },
   footer: { position: "absolute", left: 0, right: 0, bottom: 0, padding: theme.space.lg, backgroundColor: theme.color.surface, borderTopWidth: 1, borderTopColor: theme.color.border },
 });

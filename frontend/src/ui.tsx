@@ -27,7 +27,7 @@ export function Button({ title, onPress, variant = "primary", loading, disabled,
       accessibilityState={{ disabled: !!(disabled || loading), busy: !!loading }}
       style={({ pressed }) => [
         styles.btn,
-        { backgroundColor: bg, borderColor: border, borderWidth: variant === "ghost" ? 1 : 0, opacity: pressed || disabled ? 0.85 : 1 },
+        { backgroundColor: bg, borderColor: border, borderWidth: variant === "ghost" ? 1 : 0, opacity: disabled ? 0.5 : pressed ? 0.85 : 1 },
         style,
       ]}
     >
@@ -69,10 +69,10 @@ export function Input({ label, style, testID, ...rest }: InputProps) {
   );
 }
 const inputStyles = StyleSheet.create({
-  label: { fontSize: theme.font.sm, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
+  label: { fontSize: theme.font.base, color: theme.color.onSurfaceSecondary, fontWeight: "600" },
   input: {
     borderWidth: 1,
-    borderColor: theme.color.border,
+    borderColor: theme.color.borderStrong, // visible edge for older eyes (WCAG 1.4.11)
     backgroundColor: theme.color.surface,
     borderRadius: theme.radius.md,
     paddingHorizontal: theme.space.lg,

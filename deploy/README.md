@@ -124,6 +124,21 @@ blocks outgoing ports 25 and 465 on new accounts.
   the admin account unless the admin wrote to them first.
 - Use an admin email address with two-factor sign-in turned on at your email provider.
 
+**Session reminders** go out by email automatically once email works: the day before and about an
+hour before each confirmed session, to both the family and the tutor. People can turn them off
+under Profile → Session reminders.
+
+**Text message reminders (optional).** Create a Twilio account, buy a number, and fill in
+`SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM` in `deploy/.env`.
+For US numbers, finish Twilio's A2P 10DLC registration first, or carriers will block the texts.
+Until then the app simply shows text reminders as "coming soon". People must confirm their
+number with a code and tick a consent box; Twilio handles STOP replies.
+
+**Message safety.** Before a family and tutor have a paid booking, a message containing a phone
+number, email, street address, outside payment method or another messaging app shows the sender
+a warning first. If they send it anyway, it's labelled for both people and listed on the Admin
+page under *Message safety* for review.
+
 ## 6. Optional: Hetzner Object Storage
 
 Uploads start on the server's disk (`STORAGE_BACKEND=local`), and the nightly backup includes them.

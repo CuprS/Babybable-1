@@ -63,7 +63,6 @@ class W9Form(BaseModel):
     updated_at: str
 
 
-
 # ---- W-9 tax forms ----
 def _mask_tin(t: str) -> str:
     digits = "".join(ch for ch in (t or "") if ch.isdigit())

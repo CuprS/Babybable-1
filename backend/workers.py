@@ -10,7 +10,10 @@ from starlette.concurrency import run_in_threadpool
 
 import storage
 from booking_service import cancel_booking
-from core import (
+from reminders import REMINDER_LOG_RETENTION_DAYS, send_session_reminders
+MESSAGE_FLAG_RETENTION_DAYS = 365
+
+from core import (  # noqa: E402
     EVENT_RETENTION_DAYS, NOTIFICATION_RETENTION_DAYS, ORPHAN_UPLOAD_HOURS, PENDING_PAYMENT_MINUTES,
     PUSH_TOKEN_RETENTION_DAYS, booking_end_utc, booking_start_utc, db, logger, notify_once, now_utc, zone,
     tutor_has_completed_session, tutor_user_id,
@@ -48,6 +51,7 @@ async def _booking_notifications(b: dict, now: datetime) -> None:
     minutes_to_start = (start - now).total_seconds() / 60
     data = {"booking_id": b["id"]}
     if confirmed:
+        await send_session_reminders(b, start, tag)  # email / text, day before and hour before
         # Morning-of: the session is today in its own time zone and still upcoming.
         local_today = now.astimezone(zone(b.get("timezone"))).date()
         if start.astimezone(zone(b.get("timezone"))).date() == local_today and 10 < minutes_to_start < 24 * 60:
@@ -115,6 +119,10 @@ async def purge_short_lived_records() -> dict:
         "events": (await db.events.delete_many({"at": {"$lt": _ago(days=EVENT_RETENTION_DAYS)}})).deleted_count,
         "push_tokens": (await db.push_tokens.delete_many({"updated_at": {"$lt": _ago(days=PUSH_TOKEN_RETENTION_DAYS)}})).deleted_count,
         "email_outbox": (await db.email_outbox.delete_many({"attempts": {"$gte": 30}})).deleted_count,
+        "reminder_log": (await db.reminder_log.delete_many({"at": {"$lt": _ago(days=REMINDER_LOG_RETENTION_DAYS)}})).deleted_count,
+        # Reviewed message-safety items are kept for a while in case a pattern emerges, then deleted.
+        "message_flags": (await db.message_flags.delete_many(
+            {"status": "resolved", "resolved_at": {"$lt": _ago(days=MESSAGE_FLAG_RETENTION_DAYS)}})).deleted_count,
     }
     if any(counts.values()):
         logger.info(f"data clean-up: {counts}")

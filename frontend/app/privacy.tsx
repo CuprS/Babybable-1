@@ -28,7 +28,12 @@ export default function Privacy() {
         {
           icon: "calendar",
           title: "Bookings and messages",
-          body: "Session details, messages between you and the people you book with, and reviews. Messages are only visible to the two people in the conversation (and to our safety team if one of you reports it).",
+          body: "Session details, messages between you and the people you book with, and reviews. Messages are only visible to the two people in the conversation, and to our safety team if one of you reports it. Before a family and tutor have a booking, messages that share a phone number, email, address or outside payment method are labelled and checked by our safety team, to stop scams and keep children safe.",
+        },
+        {
+          icon: "bell",
+          title: "Reminders",
+          body: "We email you before each session; you can turn this off in Profile. If you choose text reminders, we keep your mobile number only for that, never show it to anyone, and delete it when you remove it or close your account.",
         },
         {
           icon: "credit-card",
@@ -38,12 +43,12 @@ export default function Privacy() {
         {
           icon: "share-2",
           title: "Who else handles your data",
-          body: "Only the services we need to run the app: our hosting and file storage, Stripe for payments, our email provider for codes and alerts, and Expo for push notifications. We don't sell data and don't use advertising trackers.",
+          body: "Only the services we need to run the app: our hosting and file storage, Stripe for payments, our email provider for codes, reminders and alerts, Twilio for text reminders if you turn them on, and Expo for push notifications. We don't sell data and don't use advertising trackers.",
         },
         {
           icon: "clock",
           title: "What we delete automatically",
-          body: "Notifications after 90 days; anonymous usage statistics (which never record who you are) after 90 days; photos and files you've replaced or no longer use within a day; sign-in codes as soon as they expire.",
+          body: "Notifications after 90 days; anonymous usage statistics (which never record who you are) after 90 days; photos and files you've replaced or no longer use within a day; sign-in codes as soon as they expire; reminder records after 30 days; reviewed safety checks on messages after a year.",
         },
         {
           icon: "trash-2",

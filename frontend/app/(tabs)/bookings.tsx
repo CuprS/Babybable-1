@@ -33,7 +33,7 @@ export default function Bookings() {
         <View style={{ flexDirection: "row", alignItems: "center", marginLeft: -theme.space.sm }}>
           <MenuButton tint={theme.color.onSurface} />
         </View>
-        <Text style={styles.title}>Bookings</Text>
+        <Text style={styles.title} accessibilityRole="header">Bookings</Text>
         <Text style={styles.sub}>Your sessions in one place.</Text>
       </View>
       {loading ? (

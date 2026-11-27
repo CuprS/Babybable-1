@@ -16,7 +16,7 @@ export default function TabsLayout() {
           paddingBottom: 12,
           paddingTop: 8,
         },
-        tabBarLabelStyle: { fontSize: 12, fontWeight: "600" },
+        tabBarLabelStyle: { fontSize: 13, fontWeight: "600" },
       }}
     >
       <Tabs.Screen
