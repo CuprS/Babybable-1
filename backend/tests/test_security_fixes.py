@@ -98,8 +98,8 @@ def parents_setup():
     uniq = uuid.uuid4().hex[:8]
     a_email = f"TEST_parentA_{uniq}@test.dev"
     b_email = f"TEST_parentB_{uniq}@test.dev"
-    ra = requests.post(f"{BASE_URL}/api/auth/signup", json={"email": a_email, "password": "password123", "name": "Parent A", "role": "parent"}, timeout=30)
-    rb = requests.post(f"{BASE_URL}/api/auth/signup", json={"email": b_email, "password": "password123", "name": "Parent B", "role": "parent"}, timeout=30)
+    ra = requests.post(f"{BASE_URL}/api/auth/signup", json={"email": a_email, "password": "password123", "name": "Parent A", "role": "parent", "accept_terms": True}, timeout=30)
+    rb = requests.post(f"{BASE_URL}/api/auth/signup", json={"email": b_email, "password": "password123", "name": "Parent B", "role": "parent", "accept_terms": True}, timeout=30)
     assert ra.status_code == 201 and rb.status_code == 201, f"signup failed {ra.status_code}/{rb.status_code}"
     tok_a = ra.json()["access_token"]
     tok_b = rb.json()["access_token"]
@@ -144,7 +144,7 @@ class TestSEC004FilesACL:
         # Sign up a tutor and upload something (not a child photo).
         uniq = uuid.uuid4().hex[:8]
         email = f"TEST_tutor_public_{uniq}@example.com"
-        rs = requests.post(f"{BASE_URL}/api/auth/signup", json={"email": email, "password": "password123", "name": "Test Tutor", "role": "tutor"}, timeout=30)
+        rs = requests.post(f"{BASE_URL}/api/auth/signup", json={"email": email, "password": "password123", "name": "Test Tutor", "role": "tutor", "accept_terms": True}, timeout=30)
         assert rs.status_code == 201
         tok = rs.json()["access_token"]
         png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
@@ -177,7 +177,7 @@ class TestRegressionHappyPath:
         """Regression: fresh tutor signup with non-@babybabel.dev email should NOT be wiped by seed_data."""
         uniq = uuid.uuid4().hex[:8]
         email = f"TEST_survivor_{uniq}@example.com"
-        r = requests.post(f"{BASE_URL}/api/auth/signup", json={"email": email, "password": "password123", "name": "Survivor", "role": "tutor"}, timeout=30)
+        r = requests.post(f"{BASE_URL}/api/auth/signup", json={"email": email, "password": "password123", "name": "Survivor", "role": "tutor", "accept_terms": True}, timeout=30)
         assert r.status_code == 201
         # Cannot restart supervisor from here, but seed_data() logic already restricts deletion to @babybabel.dev — verify by re-login existing.
         rl = _login(email, "password123")

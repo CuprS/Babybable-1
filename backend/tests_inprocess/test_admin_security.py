@@ -84,7 +84,7 @@ def test_admin_password_cannot_be_reset_by_email(client, db_call, admin):
 
 
 def test_nobody_can_sign_up_as_admin(client):
-    r = client.post("/api/auth/signup", json={"email": "x@example.com", "password": "longenough1", "name": "X", "role": "admin"})
+    r = client.post("/api/auth/signup", json={"email": "x@example.com", "password": "longenough1", "name": "X", "role": "admin", "accept_terms": True})
     assert r.status_code == 400
 
 

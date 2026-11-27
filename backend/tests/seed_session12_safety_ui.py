@@ -11,7 +11,7 @@ def ip():
 
 def signup(role, label):
     email = f"test_{label}_{uuid.uuid4().hex[:8]}@example.com"
-    r = requests.post(f"{API}/auth/signup", headers=ip(), json={"email": email, "password": "password123", "name": f"TEST_{label}", "role": role})
+    r = requests.post(f"{API}/auth/signup", headers=ip(), json={"email": email, "password": "password123", "name": f"TEST_{label}", "role": role, "accept_terms": True})
     r.raise_for_status()
     d = r.json()
     return {"email": email, "id": d["user"]["id"], "token": d["access_token"]}

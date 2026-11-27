@@ -77,21 +77,21 @@ class TestSignupPasswordLength:
     def test_password_6_chars_rejected(self):
         email = f"TEST_pw6_{uuid.uuid4().hex[:6]}@test.dev"
         r = requests.post(f"{BASE_URL}/api/auth/signup",
-                          json={"email": email, "password": "abcdef", "name": "X", "role": "parent"},
+                          json={"email": email, "password": "abcdef", "name": "X", "role": "parent", "accept_terms": True},
                           timeout=30)
         assert r.status_code == 422, f"expected 422, got {r.status_code}: {r.text}"
 
     def test_password_7_chars_rejected(self):
         email = f"TEST_pw7_{uuid.uuid4().hex[:6]}@test.dev"
         r = requests.post(f"{BASE_URL}/api/auth/signup",
-                          json={"email": email, "password": "abcdefg", "name": "X", "role": "parent"},
+                          json={"email": email, "password": "abcdefg", "name": "X", "role": "parent", "accept_terms": True},
                           timeout=30)
         assert r.status_code == 422, f"expected 422, got {r.status_code}: {r.text}"
 
     def test_password_8_chars_accepted(self):
         email = f"TEST_pw8_{uuid.uuid4().hex[:6]}@test.dev"
         r = requests.post(f"{BASE_URL}/api/auth/signup",
-                          json={"email": email, "password": "abcdefgh", "name": "X", "role": "parent"},
+                          json={"email": email, "password": "abcdefgh", "name": "X", "role": "parent", "accept_terms": True},
                           timeout=30)
         assert r.status_code == 201, f"expected 201, got {r.status_code}: {r.text}"
 
@@ -100,11 +100,11 @@ class TestDuplicateEmailGeneric:
     def test_duplicate_email_returns_400_generic_message(self):
         email = f"TEST_dup_{uuid.uuid4().hex[:6]}@test.dev"
         r1 = requests.post(f"{BASE_URL}/api/auth/signup",
-                           json={"email": email, "password": "password123", "name": "X", "role": "parent"},
+                           json={"email": email, "password": "password123", "name": "X", "role": "parent", "accept_terms": True},
                            timeout=30)
         assert r1.status_code == 201
         r2 = requests.post(f"{BASE_URL}/api/auth/signup",
-                           json={"email": email, "password": "password123", "name": "X", "role": "parent"},
+                           json={"email": email, "password": "password123", "name": "X", "role": "parent", "accept_terms": True},
                            timeout=30)
         assert r2.status_code == 400, f"expected 400, got {r2.status_code}: {r2.text}"
         detail = (r2.json().get("detail") or "").lower()

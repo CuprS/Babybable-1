@@ -8,7 +8,7 @@ OUT = "/tmp/blocks_ui_accounts.json"
 
 def signup(role, label):
     email = f"test_{label}_{uuid.uuid4().hex[:6]}@example.com"
-    r = requests.post(f"{API}/auth/signup", json={"email": email, "password": "password123", "name": f"TEST {label}", "role": role})
+    r = requests.post(f"{API}/auth/signup", json={"email": email, "password": "password123", "name": f"TEST {label}", "role": role, "accept_terms": True})
     r.raise_for_status()
     d = r.json()
     return {"email": email, "id": d["user"]["id"], "name": d["user"]["name"], "token": d["access_token"]}

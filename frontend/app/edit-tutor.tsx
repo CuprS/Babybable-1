@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import { apiFetch, apiUpload, deviceTimeZone, fileUrl, Tutor, zoneLabel } from "@/src/api";
@@ -16,6 +16,8 @@ import { WeeklyAvailability } from "@/src/availability";
 
 export default function EditTutor() {
   const router = useRouter();
+  // ?setup=1: part of joining (after confirming the email), so "save" moves on to the identity check.
+  const setup = useLocalSearchParams<{ setup?: string }>().setup === "1";
   const { show } = useToast();
   const [tutor, setTutor] = useState<Tutor | null>(null);
   const [bio, setBio] = useState("");
@@ -119,7 +121,9 @@ export default function EditTutor() {
         }),
       });
       setTutor(updated);
-      router.back();
+      if (setup) router.replace("/verify-tutor");
+      else if (router.canGoBack()) router.back();
+      else router.replace("/");
     } catch (e: any) { show({ kind: "error", title: "Save failed", body: e?.message }); }
     finally { setSaving(false); }
   };
@@ -129,12 +133,18 @@ export default function EditTutor() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} testID="edit-back" accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={24} color={theme.color.onSurface} /></Pressable>
-        <Text style={styles.title}>Edit profile</Text>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} testID="edit-back" accessibilityRole="button" accessibilityLabel="Go back"><Feather name="arrow-left" size={24} color={theme.color.onSurface} /></Pressable>
+        <Text style={styles.title}>{setup ? "Set up your profile" : "Edit profile"}</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={{ padding: theme.space.xl, paddingBottom: theme.space["3xl"], gap: theme.space.lg }}>
+        {setup ? (
+          <View style={styles.setupNote} testID="edit-setup-note">
+            <Text style={styles.setupStep}>Step 2 of 3</Text>
+            <Text style={styles.setupText}>Tell families about yourself: a photo, the languages you teach, your rate and when you&apos;re free. Next, you&apos;ll verify your identity.</Text>
+          </View>
+        ) : null}
         <Text style={styles.section}>Profile photo</Text>
         <View style={styles.photoRow}>
           <Pressable onPress={() => uploadKey("avatar")} style={styles.avatarWrap} testID="edit-avatar">
@@ -291,7 +301,7 @@ export default function EditTutor() {
           )}
         </View>
 
-        <Button title="Save profile" onPress={save} loading={saving} testID="edit-save" />
+        <Button title={setup ? "Save and continue" : "Save profile"} onPress={save} loading={saving} testID="edit-save" />
       </ScrollView>
     </SafeAreaView>
   );
@@ -328,5 +338,8 @@ const styles = StyleSheet.create({
   docBtnSmall: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.radius.pill, backgroundColor: theme.color.brand },
   docBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   tzBtn: { minHeight: 52, paddingHorizontal: theme.space.md, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.color.brand, alignItems: "center", justifyContent: "center" },
+  setupNote: { backgroundColor: theme.color.surfaceSecondary, borderRadius: theme.radius.md, padding: theme.space.lg, gap: 4 },
+  setupStep: { color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.sm },
+  setupText: { color: theme.color.onSurface, fontSize: theme.font.base, lineHeight: 22 },
   tzBtnText: { color: theme.color.brandDark, fontWeight: "700", fontSize: theme.font.sm },
 });

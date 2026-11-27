@@ -22,7 +22,7 @@ def _ip():
 def _signup(role, label, email=None, expect=201):
     email = email or f"test_{label}_{uuid.uuid4().hex[:8]}@example.com"
     USED_EMAILS.append(email)
-    r = requests.post(f"{API}/auth/signup", headers=_ip(), json={"email": email, "password": "password123", "name": f"TEST_{label}", "role": role})
+    r = requests.post(f"{API}/auth/signup", headers=_ip(), json={"email": email, "password": "password123", "name": f"TEST_{label}", "role": role, "accept_terms": True})
     if r.status_code == 429:
         pytest.skip("auth rate limited")
     assert r.status_code == expect, r.text
@@ -310,7 +310,7 @@ class TestEvasionProbes:
         for i in range(3):
             assert _block(_mk("tutor", f"s12lpb{i}"), x["id"], "spam").status_code == 200
         assert requests.get(f"{API}/auth/me", headers=x["h"]).status_code == 423
-        r = requests.post(f"{API}/auth/signup", headers=_ip(), json={"email": f"test_lp_{tag}+alt@example.com", "password": "password123", "name": "TEST_s12lp2", "role": "parent"})
+        r = requests.post(f"{API}/auth/signup", headers=_ip(), json={"email": f"test_lp_{tag}+alt@example.com", "password": "password123", "name": "TEST_s12lp2", "role": "parent", "accept_terms": True})
         if r.status_code == 201:
             CREATED.append({"id": r.json()["user"]["id"], "h": {"Authorization": f"Bearer {r.json()['access_token']}"}})
         assert r.status_code == 423, f"alias of a live paused account got an active account: {r.status_code}"
@@ -328,7 +328,7 @@ class TestEvasionProbes:
         assert requests.delete(f"{API}/auth/me", headers=x["h"]).status_code == 200
         yy = requests.get(f"{API}/auth/me", headers=y["h"]).status_code
         assert requests.delete(f"{API}/auth/me", headers=y["h"]).status_code == 200
-        r = requests.post(f"{API}/auth/signup", headers=_ip(), json={"email": f"test_tb_{tag}+z@example.com", "password": "password123", "name": "TEST_s12tb_z", "role": "parent"})
+        r = requests.post(f"{API}/auth/signup", headers=_ip(), json={"email": f"test_tb_{tag}+z@example.com", "password": "password123", "name": "TEST_s12tb_z", "role": "parent", "accept_terms": True})
         if r.status_code == 201:
             CREATED.append({"id": r.json()["user"]["id"], "h": {"Authorization": f"Bearer {r.json()['access_token']}"}})
         assert r.status_code == 423, f"tombstone downgraded by deleting alias Y (y /me={yy}); re-signup got {r.status_code}"

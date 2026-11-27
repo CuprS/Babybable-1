@@ -33,7 +33,8 @@ function AuthGate() {
       // (/admin isn't sent to sign-in: to anyone but the admin it looks like a page that doesn't exist.)
       router.replace("/onboarding");
     } else if (user && inAuth) {
-      router.replace(user.is_admin ? "/admin" : "/(tabs)");
+      // Right after signing up or logging in: confirm the email first if that's still to do.
+      router.replace(user.is_admin ? "/admin" : user.email_verified === false ? "/verify-email" : "/(tabs)");
     } else if (user && user.is_admin && !inAdmin && segments[0] !== undefined && !isPublic) {
       if (segments[0] === "(tabs)") router.replace("/admin");
     }

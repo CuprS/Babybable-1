@@ -25,6 +25,8 @@ from models import (
 router = APIRouter()
 
 CODE_TTL_MINUTES = 15
+# Bump when the Terms of Service or Privacy Policy change in a way people must agree to again.
+TERMS_VERSION = "2026-11"
 CODE_MAX_ATTEMPTS = 5
 
 
@@ -125,6 +127,10 @@ async def signup(body: SignupRequest, request: Request, response: Response):
     if body.role not in ("parent", "tutor"):
         # Admin roles are provisioned server-side only; never accept via signup.
         raise HTTPException(400, "Invalid role")
+    if not body.accept_terms:
+        raise HTTPException(400, "Please agree to the Terms of Service and Privacy Policy to create an account.")
+    if body.password.strip().lower() in (email, email.split("@")[0], body.name.lower()):
+        raise HTTPException(400, "Please choose a password that isn't your name or email address.")
     if await db.users.find_one({"email": email}):
         # Generic error prevents easy email enumeration via signup.
         raise HTTPException(400, "We couldn't create that account. Try logging in or use a different email.")
@@ -144,6 +150,7 @@ async def signup(body: SignupRequest, request: Request, response: Response):
         "timezone": body.timezone if valid_timezone(body.timezone) else None,
         "created_at": now_iso(),
     }
+    doc["terms_accepted_at"], doc["terms_version"] = doc["created_at"], TERMS_VERSION
     if tomb and tomb.get("suspended"):
         doc.update({"suspended": True, "suspended_at": doc["created_at"],
                     "suspended_reason": "Re-created an account that was paused for review"})

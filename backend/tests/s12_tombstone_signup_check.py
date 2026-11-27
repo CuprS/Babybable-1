@@ -20,7 +20,7 @@ async def main():
     await db.account_tombstones.insert_one({"email_fp": fp(email), "suspended": True, "deleted_at": "2026-01-01T00:00:00+00:00"})
     try:
         r = requests.post(f"{API}/auth/signup", headers={"X-Forwarded-For": f"10.9.{random.randint(1,250)}.{random.randint(1,250)}"},
-                          json={"email": f"TEST_Tomb_{tag}+re@example.com", "password": "password123", "name": "TEST_tomb", "role": "tutor"})
+                          json={"email": f"TEST_Tomb_{tag}+re@example.com", "password": "password123", "name": "TEST_tomb", "role": "tutor", "accept_terms": True})
         print("signup status", r.status_code, r.text)
         u = await db.users.find_one({"email": f"test_tomb_{tag}+re@example.com"}, {"_id": 0, "password_hash": 0})
         print("user doc", u)

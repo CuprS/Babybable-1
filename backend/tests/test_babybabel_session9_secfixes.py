@@ -77,7 +77,7 @@ class TestSignupRoleAdmin:
         email = f"TEST_admin_signup_{uniq}@test.dev"
         r = requests.post(
             f"{BASE_URL}/api/auth/signup",
-            json={"email": email, "password": "password123", "name": "Nope", "role": "admin"},
+            json={"email": email, "password": "password123", "name": "Nope", "role": "admin", "accept_terms": True},
             timeout=30,
         )
         assert r.status_code == 400, f"expected 400, got {r.status_code} {r.text}"
@@ -90,7 +90,7 @@ class TestSignupRoleAdmin:
         email = f"TEST_parent_ok_{uniq}@test.dev"
         r = requests.post(
             f"{BASE_URL}/api/auth/signup",
-            json={"email": email, "password": "password123", "name": "OK Parent", "role": "parent"},
+            json={"email": email, "password": "password123", "name": "OK Parent", "role": "parent", "accept_terms": True},
             timeout=30,
         )
         assert r.status_code == 201, f"expected 201, got {r.status_code} {r.text}"
@@ -106,7 +106,7 @@ class TestSignupRoleAdmin:
         email = f"TEST_garbage_{uniq}@test.dev"
         r = requests.post(
             f"{BASE_URL}/api/auth/signup",
-            json={"email": email, "password": "password123", "name": "Nope", "role": "superuser"},
+            json={"email": email, "password": "password123", "name": "Nope", "role": "superuser", "accept_terms": True},
             timeout=30,
         )
         # Pydantic may reject via 422 OR server via 400. Both are acceptable ("not accepted").
@@ -331,7 +331,7 @@ def accreditation_setup():
     # signup fresh tutor
     rt = requests.post(
         f"{BASE_URL}/api/auth/signup",
-        json={"email": tutor_email, "password": "password123", "name": "Acc Tutor", "role": "tutor"},
+        json={"email": tutor_email, "password": "password123", "name": "Acc Tutor", "role": "tutor", "accept_terms": True},
         timeout=30,
     )
     assert rt.status_code == 201, f"tutor signup failed: {rt.status_code} {rt.text}"
@@ -340,7 +340,7 @@ def accreditation_setup():
     # signup fresh parent
     rp = requests.post(
         f"{BASE_URL}/api/auth/signup",
-        json={"email": parent_email, "password": "password123", "name": "Acc Parent", "role": "parent"},
+        json={"email": parent_email, "password": "password123", "name": "Acc Parent", "role": "parent", "accept_terms": True},
         timeout=30,
     )
     assert rp.status_code == 201, f"parent signup failed: {rp.status_code} {rp.text}"
@@ -453,7 +453,7 @@ def child_avatar_setup():
     parent_email = f"TEST_child_parent_{uniq}@test.dev"
     rp = requests.post(
         f"{BASE_URL}/api/auth/signup",
-        json={"email": parent_email, "password": "password123", "name": "Child Parent", "role": "parent"},
+        json={"email": parent_email, "password": "password123", "name": "Child Parent", "role": "parent", "accept_terms": True},
         timeout=30,
     )
     assert rp.status_code == 201, rp.text
@@ -554,7 +554,7 @@ class TestDeleteAccountPurge:
         parent_email = f"sec-fixup-parent-{uniq}@test.dev"
         rt = requests.post(
             f"{BASE_URL}/api/auth/signup",
-            json={"email": tutor_email, "password": "password123", "name": "Fixup Tutor", "role": "tutor"},
+            json={"email": tutor_email, "password": "password123", "name": "Fixup Tutor", "role": "tutor", "accept_terms": True},
             timeout=30,
         )
         assert rt.status_code == 201, rt.text
@@ -563,7 +563,7 @@ class TestDeleteAccountPurge:
 
         rp = requests.post(
             f"{BASE_URL}/api/auth/signup",
-            json={"email": parent_email, "password": "password123", "name": "Fixup Parent", "role": "parent"},
+            json={"email": parent_email, "password": "password123", "name": "Fixup Parent", "role": "parent", "accept_terms": True},
             timeout=30,
         )
         assert rp.status_code == 201, rp.text

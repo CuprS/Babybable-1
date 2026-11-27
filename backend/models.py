@@ -2,7 +2,7 @@
 import uuid
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from core import DATE_PATTERN, MAX_PRICE_CENTS, TIME_PATTERN
 
@@ -16,6 +16,17 @@ class SignupRequest(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     role: Role
     timezone: Optional[str] = Field(default=None, max_length=64)
+    # The person ticked "I agree to the Terms of Service and Privacy Policy". Recorded with the
+    # date and the terms version, as proof of consent.
+    accept_terms: bool = False
+
+    @field_validator("name")
+    @classmethod
+    def _name_not_blank(cls, v: str) -> str:
+        v = " ".join(v.split())
+        if not v:
+            raise ValueError("Please enter your name")
+        return v
 
 
 class LoginRequest(BaseModel):

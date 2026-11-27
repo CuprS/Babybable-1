@@ -88,7 +88,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signUp = async (email: string, password: string, name: string, role: Role) => {
     const data = await apiFetch<{ access_token: string; user: UserPublic }>("/auth/signup", {
       method: "POST",
-      body: JSON.stringify({ email, password, name, role, timezone: deviceTimeZone() }),
+      // The sign-up screen only calls this once the person ticked "I agree".
+      body: JSON.stringify({ email, password, name, role, timezone: deviceTimeZone(), accept_terms: true }),
     });
     await saveToken(data.access_token);
     setUser(data.user);

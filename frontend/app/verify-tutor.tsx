@@ -70,7 +70,7 @@ export default function VerifyTutor() {
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={12} testID="verify-tutor-back" accessibilityRole="button" accessibilityLabel="Go back">
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} testID="verify-tutor-back" accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="arrow-left" size={24} color={theme.color.onSurface} />
         </Pressable>
         <Text style={styles.title} accessibilityRole="header">Verification</Text>

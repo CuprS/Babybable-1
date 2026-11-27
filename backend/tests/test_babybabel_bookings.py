@@ -33,7 +33,7 @@ class TestTutorSignupPersistence:
         email = f"tutor.new.{uniq}@example.com"
         pw = "password123"
         r = requests.post(f"{API}/auth/signup", json={
-            "email": email, "password": pw, "name": f"Test Tutor {uniq}", "role": "tutor",
+            "email": email, "password": pw, "name": f"Test Tutor {uniq}", "role": "tutor", "accept_terms": True,
         }, timeout=30)
         assert r.status_code == 201, r.text
         data = r.json()
@@ -78,7 +78,7 @@ class TestBookingGetACL:
         if r.status_code != 200:
             # create it
             requests.post(f"{API}/auth/signup", json={
-                "email": PARENT_EMAIL, "password": PARENT_PW, "name": "Parent Test", "role": "parent"
+                "email": PARENT_EMAIL, "password": PARENT_PW, "name": "Parent Test", "role": "parent", "accept_terms": True
             }, timeout=30)
             r = _login(PARENT_EMAIL, PARENT_PW)
         assert r.status_code == 200, r.text
@@ -128,7 +128,7 @@ class TestBookingGetACL:
     def test_other_parent_forbidden(self, booking):
         other_email = f"other.{uuid.uuid4().hex[:8]}@test.dev"
         r0 = requests.post(f"{API}/auth/signup", json={
-            "email": other_email, "password": "password123", "name": "Other", "role": "parent"
+            "email": other_email, "password": "password123", "name": "Other", "role": "parent", "accept_terms": True
         }, timeout=30)
         assert r0.status_code == 201, r0.text
         token = r0.json()["access_token"]

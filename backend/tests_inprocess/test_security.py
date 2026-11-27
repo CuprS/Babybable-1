@@ -178,7 +178,7 @@ WEB = {"X-Session-Mode": "cookie", "X-Babybabel-CSRF": "1"}
 def test_website_session_uses_an_httponly_cookie(make_user):
     web = _web_client()
     email = f"web-{uuid.uuid4().hex[:8]}@example.com"
-    r = web.post("/api/auth/signup", headers=WEB, json={"email": email, "password": "longenough1", "name": "Web Parent", "role": "parent"})
+    r = web.post("/api/auth/signup", headers=WEB, json={"email": email, "password": "longenough1", "name": "Web Parent", "role": "parent", "accept_terms": True})
     assert r.status_code == 201
     assert r.json()["access_token"] == ""  # nothing a script could read
     cookie = r.headers["set-cookie"].lower()

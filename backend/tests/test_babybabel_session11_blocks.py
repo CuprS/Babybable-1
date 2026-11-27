@@ -11,7 +11,7 @@ API = f"{BASE_URL}/api"
 
 def _signup(role, label):
     email = f"test_{label}_{uuid.uuid4().hex[:8]}@example.com"
-    r = requests.post(f"{API}/auth/signup", json={"email": email, "password": "password123", "name": f"TEST_{label}", "role": role})
+    r = requests.post(f"{API}/auth/signup", json={"email": email, "password": "password123", "name": f"TEST_{label}", "role": role, "accept_terms": True})
     if r.status_code == 429:
         pytest.skip("auth rate limited")
     assert r.status_code == 201, r.text

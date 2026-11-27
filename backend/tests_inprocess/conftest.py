@@ -66,7 +66,7 @@ def H(tok: str) -> dict:
 def make_user(client):
     def _make(role: str = "parent", tz: str | None = None) -> dict:
         email = f"{role}-{uuid.uuid4().hex[:8]}@example.com"
-        body = {"email": email, "password": "longenough1", "name": f"Test {role.title()}", "role": role}
+        body = {"email": email, "password": "longenough1", "name": f"Test {role.title()}", "role": role, "accept_terms": True}
         if tz:
             body["timezone"] = tz
         r = client.post("/api/auth/signup", json=body)

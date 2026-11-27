@@ -22,8 +22,8 @@ export default function Login() {
   const submit = async () => {
     setLoading(true); setError("");
     try {
-      const u = await signIn(email.trim(), password, needsCode ? code.trim() : undefined);
-      router.replace(u.is_admin ? "/admin" : "/(tabs)");
+      await signIn(email.trim(), password, needsCode ? code.trim() : undefined);
+      // app/_layout.tsx takes it from here (admin page, email confirmation or the app).
     } catch (e: any) {
       if (e?.status === 428) {
         setNeedsCode(true); setCode(""); setNotice(e.message);

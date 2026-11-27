@@ -72,7 +72,7 @@ def parent_token():
     if r.status_code != 200:
         rs = requests.post(
             f"{BASE}/api/auth/signup",
-            json={"email": PARENT_EMAIL, "password": PARENT_PW, "name": "Parent Test", "role": "parent"},
+            json={"email": PARENT_EMAIL, "password": PARENT_PW, "name": "Parent Test", "role": "parent", "accept_terms": True},
             timeout=15,
         )
         assert rs.status_code in (201, 400), f"parent signup unexpected: {rs.status_code} {rs.text}"
@@ -170,7 +170,7 @@ class TestBookingsAndFee:
         pw = "password123"
         rs = requests.post(
             f"{BASE}/api/auth/signup",
-            json={"email": email, "password": pw, "name": "S4 Parent", "role": "parent"},
+            json={"email": email, "password": pw, "name": "S4 Parent", "role": "parent", "accept_terms": True},
             timeout=15,
         )
         assert rs.status_code == 201, f"signup: {rs.status_code} {rs.text}"
@@ -328,7 +328,7 @@ class TestAuthHardening:
     def test_c1_password_too_short_returns_422(self):
         r = requests.post(
             f"{BASE}/api/auth/signup",
-            json={"email": f"TEST_short_{uuid.uuid4().hex[:6]}@test.dev", "password": "abc", "name": "X", "role": "parent"},
+            json={"email": f"TEST_short_{uuid.uuid4().hex[:6]}@test.dev", "password": "abc", "name": "X", "role": "parent", "accept_terms": True},
             timeout=15,
         )
         assert r.status_code == 422, f"{r.status_code} {r.text}"
@@ -337,7 +337,7 @@ class TestAuthHardening:
         # sofia is a known existing user
         r = requests.post(
             f"{BASE}/api/auth/signup",
-            json={"email": SOFIA_EMAIL, "password": "password123", "name": "dup", "role": "parent"},
+            json={"email": SOFIA_EMAIL, "password": "password123", "name": "dup", "role": "parent", "accept_terms": True},
             timeout=15,
         )
         assert r.status_code == 400, f"{r.status_code} {r.text}"

@@ -71,7 +71,7 @@ def _login(email, password):
 def _signup(name, email, password, role="tutor"):
     r = requests.post(
         f"{BASE}/api/auth/signup",
-        json={"name": name, "email": email, "password": password, "role": role},
+        json={"name": name, "email": email, "password": password, "role": role, "accept_terms": True},
         timeout=15,
     )
     return r
